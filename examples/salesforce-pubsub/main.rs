@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     // Example 3: Initialize client with Username-Password flow
-    let mut client = client::Builder::new()
+    let client = client::Builder::new()
         .credentials(Credentials {
             client_id: env::var("SALESFORCE_CLIENT_ID")
                 .expect("SALESFORCE_CLIENT_ID environment variable not set"),
