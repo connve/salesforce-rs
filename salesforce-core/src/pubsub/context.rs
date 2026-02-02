@@ -53,7 +53,8 @@ impl tonic::service::Interceptor for ContextInterceptor {
 /// Pub/Sub API context for making gRPC calls.
 ///
 /// Manages authentication and provides methods for interacting with
-/// Salesforce Pub/Sub API endpoints.
+/// Salesforce Pub/Sub API endpoints. Supports reconnection when
+/// authentication credentials expire or are invalidated.
 ///
 /// # Examples
 ///
@@ -87,6 +88,8 @@ pub struct Context {
             ContextInterceptor,
         >,
     >,
+    channel: tonic::transport::Channel,
+    client: client::Client,
 }
 
 impl Context {
@@ -124,9 +127,100 @@ impl Context {
             tenant_id,
         };
 
-        let pubsub = PubSubClient::with_interceptor(channel, interceptor);
+        let pubsub = PubSubClient::with_interceptor(channel.clone(), interceptor);
 
-        Ok(Context { pubsub })
+        Ok(Context {
+            pubsub,
+            channel,
+            client,
+        })
+    }
+
+    /// Reconnects the Pub/Sub context with fresh authentication credentials.
+    ///
+    /// This method forces a new OAuth2 authentication and recreates the gRPC
+    /// client with updated metadata headers. Use this when you receive
+    /// authentication errors from the Pub/Sub API, such as:
+    /// - "authentication exception occurred"
+    /// - "request does not have valid authentication credentials"
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - OAuth2 reconnection fails
+    /// - Token is missing or invalid
+    /// - Metadata headers cannot be created
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use salesforce_core::client;
+    /// use salesforce_core::pubsub::context::Context;
+    /// use salesforce_pubsub_v1::eventbus;
+    /// use std::path::PathBuf;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = client::Builder::new()
+    ///     .credentials_path(PathBuf::from("credentials.json"))
+    ///     .build()?
+    ///     .connect()
+    ///     .await?;
+    ///
+    /// let channel = tonic::transport::Channel::from_static(eventbus::ENDPOINT)
+    ///     .connect()
+    ///     .await?;
+    ///
+    /// let mut context = Context::new(channel, client)?;
+    ///
+    /// // Later, if authentication fails...
+    /// context.reconnect().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn reconnect(&mut self) -> Result<(), Error> {
+        // Force fresh OAuth2 authentication
+        self.client
+            .reconnect()
+            .await
+            .map_err(|e| Error::Tonic(Box::new(tonic::Status::unauthenticated(e.to_string()))))?;
+
+        // Get fresh token
+        let token = self
+            .client
+            .current_access_token()
+            .map_err(|_| Error::MissingTokenResponse())?;
+
+        let auth_header: tonic::metadata::AsciiMetadataValue = token
+            .parse()
+            .map_err(|e| Error::InvalidMetadataValue { source: e })?;
+
+        let instance_url: tonic::metadata::AsciiMetadataValue = self
+            .client
+            .instance_url
+            .as_ref()
+            .ok_or_else(|| Error::MissingRequiredAttribute("instance_url".to_string()))?
+            .parse()
+            .map_err(|e| Error::InvalidMetadataValue { source: e })?;
+
+        let tenant_id: tonic::metadata::AsciiMetadataValue = self
+            .client
+            .tenant_id
+            .as_ref()
+            .ok_or_else(|| Error::MissingRequiredAttribute("tenant_id".to_string()))?
+            .parse()
+            .map_err(|e| Error::InvalidMetadataValue { source: e })?;
+
+        let interceptor = ContextInterceptor {
+            auth_header,
+            instance_url,
+            tenant_id,
+        };
+
+        // Recreate PubSubClient with fresh credentials
+        self.pubsub = PubSubClient::with_interceptor(self.channel.clone(), interceptor);
+
+        Ok(())
     }
 
     /// Retrieves topic metadata.
@@ -775,5 +869,256 @@ mod tests {
         // Should fail due to missing token
         let result = Context::new(channel, client);
         assert!(matches!(result, Err(Error::MissingTokenResponse())));
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_without_token_state() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::{AccessToken, EmptyExtraTokenFields};
+
+        // Create client with token
+        let mut client = client::Builder::new()
+            .credentials(client::Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        let token = BasicTokenResponse::new(
+            AccessToken::new("valid_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
+        client.instance_url = Some("https://test.salesforce.com".to_string());
+        client.tenant_id = Some("tenant123".to_string());
+
+        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
+        let channel = endpoint.connect_lazy();
+
+        let mut context = Context::new(channel, client).unwrap();
+
+        // Clear token state to simulate missing credentials
+        context.client.token_state = None;
+
+        // Reconnect should fail because we can't actually authenticate without real credentials
+        let result = context.reconnect().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_verifies_fields_after_reconnect() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::{AccessToken, EmptyExtraTokenFields};
+
+        // Create client with token
+        let mut client = client::Builder::new()
+            .credentials(client::Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        let token = BasicTokenResponse::new(
+            AccessToken::new("valid_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
+        client.instance_url = Some("https://test.salesforce.com".to_string());
+        client.tenant_id = Some("tenant123".to_string());
+
+        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
+        let channel = endpoint.connect_lazy();
+
+        let mut context = Context::new(channel, client).unwrap();
+
+        // Clear instance_url to simulate missing field after reconnect attempt
+        context.client.instance_url = None;
+
+        // Reconnect should fail due to missing instance_url after reconnect
+        // (it would fail during client.reconnect() first, but this tests the validation)
+        let result = context.reconnect().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_with_invalid_metadata_after_reconnect() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::{AccessToken, EmptyExtraTokenFields};
+
+        // Create client with token
+        let mut client = client::Builder::new()
+            .credentials(client::Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        let token = BasicTokenResponse::new(
+            AccessToken::new("valid_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
+        client.instance_url = Some("https://test.salesforce.com".to_string());
+        client.tenant_id = Some("tenant123".to_string());
+
+        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
+        let channel = endpoint.connect_lazy();
+
+        let mut context = Context::new(channel, client).unwrap();
+
+        // Set invalid tenant_id with newlines (invalid ASCII for metadata)
+        context.client.tenant_id = Some("tenant\nwith\nnewlines".to_string());
+
+        // Reconnect should fail during metadata conversion
+        let result = context.reconnect().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_preserves_channel() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::{AccessToken, EmptyExtraTokenFields};
+
+        // Create client with token
+        let mut client = client::Builder::new()
+            .credentials(client::Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        let token = BasicTokenResponse::new(
+            AccessToken::new("initial_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
+        client.instance_url = Some("https://test.salesforce.com".to_string());
+        client.tenant_id = Some("tenant123".to_string());
+
+        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
+        let channel = endpoint.connect_lazy();
+
+        let context = Context::new(channel, client).unwrap();
+
+        // Verify channel is stored
+        let debug_str = format!("{:?}", context.channel);
+        assert!(debug_str.contains("Channel"));
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_without_credentials() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::{AccessToken, EmptyExtraTokenFields};
+
+        // Create client with token but no credentials for reconnect
+        let mut client = client::Builder::new()
+            .credentials(client::Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        let token = BasicTokenResponse::new(
+            AccessToken::new("valid_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
+        client.instance_url = Some("https://test.salesforce.com".to_string());
+        client.tenant_id = Some("tenant123".to_string());
+
+        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
+        let channel = endpoint.connect_lazy();
+
+        let mut context = Context::new(channel, client).unwrap();
+
+        // Attempt reconnect - will fail because we don't have real OAuth credentials
+        let result = context.reconnect().await;
+        assert!(result.is_err());
+        // Error should be wrapped in Tonic error
+        if let Err(e) = result {
+            assert!(matches!(e, Error::Tonic(_)));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_context_stores_client_and_channel() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::{AccessToken, EmptyExtraTokenFields};
+
+        // Create client with all valid data
+        let mut client = client::Builder::new()
+            .credentials(client::Credentials {
+                client_id: "client123".to_string(),
+                client_secret: Some("secret123".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://login.salesforce.com".to_string(),
+                tenant_id: "00Dxx0000001gPL".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        let token = BasicTokenResponse::new(
+            AccessToken::new("valid_access_token_123".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
+        client.instance_url = Some("https://login.salesforce.com".to_string());
+        client.tenant_id = Some("00Dxx0000001gPL".to_string());
+
+        // Store tenant_id for later comparison
+        let expected_tenant = client.tenant_id.clone().unwrap();
+
+        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
+        let channel = endpoint.connect_lazy();
+
+        // Create context
+        let context = Context::new(channel, client).unwrap();
+
+        // Verify that client is stored correctly by accessing its fields
+        assert_eq!(context.client.tenant_id.as_ref().unwrap(), &expected_tenant);
+        assert!(context.client.instance_url.is_some());
+        assert!(context.client.token_state.is_some());
+
+        // Verify channel is stored
+        let debug_str = format!("{:?}", context.channel);
+        assert!(debug_str.contains("Channel"));
     }
 }

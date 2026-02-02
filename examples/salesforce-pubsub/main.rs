@@ -73,17 +73,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Got fresh access token: {}", &fresh_token[..20]); // Log first 20 chars
 
     // If you encounter INVALID_SESSION_ID errors from Salesforce API calls,
-    // call access_token() to get a fresh token and retry your operation once.
+    // call reconnect() to force a fresh OAuth2 authentication and retry once.
     // Example retry pattern in your application code:
     //
-    // match salesforce_api_call(&token).await {
+    // match salesforce_api_call(&client).await {
     //     Err(e) if e.to_string().contains("INVALID_SESSION_ID") => {
-    //         info!("Session invalid, refreshing token and retrying...");
-    //         let fresh_token = client.access_token().await?;
-    //         salesforce_api_call(&fresh_token).await? // Retry once
+    //         info!("Session invalid, reconnecting and retrying...");
+    //         client.reconnect().await?;
+    //         salesforce_api_call(&client).await? // Retry once
     //     }
     //     result => result?,
     // }
+    //
+    // Note: reconnect() requires &mut self, so your client needs to be mutable.
 
     // Connect to Pub/Sub API
     let channel = tonic::transport::Channel::from_static(eventbus::ENDPOINT)
