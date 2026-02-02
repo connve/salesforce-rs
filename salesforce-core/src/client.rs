@@ -1,14 +1,82 @@
 use oauth2::basic::{BasicClient, BasicTokenType};
-use oauth2::{AuthUrl, ClientId, ClientSecret, EmptyExtraTokenFields, TokenUrl};
+use oauth2::{
+    AuthUrl, ClientId, ClientSecret, EmptyExtraTokenFields, RefreshToken, TokenResponse, TokenUrl,
+};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Default OAuth2 authorization endpoint path.
 const DEFAULT_AUTHORIZE_PATH: &str = "/services/oauth2/authorize";
 
 /// Default OAuth2 token endpoint path.
 const DEFAULT_TOKEN_PATH: &str = "/services/oauth2/token";
+
+/// Buffer time (in seconds) before token expiry to trigger refresh.
+/// Refresh tokens 5 minutes before they expire to avoid race conditions.
+const TOKEN_REFRESH_BUFFER_SECONDS: u64 = 300;
+
+/// Type alias for Salesforce OAuth2 token response using standard fields.
+pub type SalesforceTokenResponse =
+    oauth2::StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>;
+
+/// Internal state for managing token lifecycle.
+#[derive(Debug, Clone)]
+pub(crate) struct TokenState {
+    /// The current access token response.
+    token_response: SalesforceTokenResponse,
+    /// Unix timestamp (seconds) when the token expires.
+    expires_at: u64,
+}
+
+impl TokenState {
+    /// Creates a new token state from a token response.
+    pub(crate) fn new(token_response: SalesforceTokenResponse) -> Result<Self, Error> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|source| Error::SystemTimeError { source })?
+            .as_secs();
+
+        let expires_at = if let Some(expires_in) = token_response.expires_in() {
+            now.checked_add(expires_in.as_secs())
+                .ok_or(Error::TokenExpiryOverflow)?
+        } else {
+            // Default to 2 hours if not provided (Salesforce default)
+            now.checked_add(7200).ok_or(Error::TokenExpiryOverflow)?
+        };
+
+        Ok(Self {
+            token_response,
+            expires_at,
+        })
+    }
+
+    /// Returns true if the token is expired or will expire within the buffer time.
+    fn is_expired(&self, buffer_seconds: u64) -> Result<bool, Error> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|source| Error::SystemTimeError { source })?
+            .as_secs();
+
+        let threshold = now
+            .checked_add(buffer_seconds)
+            .ok_or(Error::TimeThresholdOverflow)?;
+
+        Ok(threshold >= self.expires_at)
+    }
+
+    /// Returns the access token as a string.
+    fn access_token(&self) -> &str {
+        self.token_response.access_token().secret()
+    }
+
+    /// Returns the refresh token if available.
+    fn refresh_token(&self) -> Option<&RefreshToken> {
+        self.token_response.refresh_token()
+    }
+}
 
 /// Errors that can occur during client operations.
 #[derive(thiserror::Error, Debug)]
@@ -47,6 +115,24 @@ pub enum Error {
         /// Description of what's missing or invalid.
         message: String,
     },
+    /// Failed to get current system time.
+    #[error("Failed to get current system time: {source}")]
+    SystemTimeError {
+        #[source]
+        source: std::time::SystemTimeError,
+    },
+    /// Token expiry time calculation resulted in arithmetic overflow.
+    #[error("Token expiry time calculation overflow")]
+    TokenExpiryOverflow,
+    /// Time threshold calculation resulted in arithmetic overflow.
+    #[error("Time threshold calculation overflow")]
+    TimeThresholdOverflow,
+    /// Token refresh is not available (no refresh token present).
+    #[error("Token refresh not available: no refresh token in response")]
+    NoRefreshToken,
+    /// Failed to acquire lock on token state.
+    #[error("Failed to acquire lock on token state")]
+    LockError,
 }
 
 /// OAuth2 authentication flow type.
@@ -256,8 +342,8 @@ pub struct Client {
     credentials_from: CredentialsFrom,
     /// OAuth2 authentication flow to use.
     auth_flow: AuthFlow,
-    /// OAuth2 token response containing access token and metadata.
-    pub token_result: Option<oauth2::StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>>,
+    /// Thread-safe token state with automatic refresh capabilities.
+    pub(crate) token_state: Option<Arc<RwLock<TokenState>>>,
     /// Salesforce instance URL.
     pub instance_url: Option<String>,
     /// Organization ID.
@@ -339,7 +425,7 @@ impl Client {
             .build()
             .map_err(|e| Error::TokenExchange(Box::new(e)))?;
 
-        let token_result = match self.auth_flow {
+        let token_response = match self.auth_flow {
             AuthFlow::ClientCredentials => {
                 self.exchange_client_credentials(&credentials, &http_client)
                     .await?
@@ -349,7 +435,8 @@ impl Client {
             }
         };
 
-        self.token_result = Some(token_result);
+        let token_state = TokenState::new(token_response)?;
+        self.token_state = Some(Arc::new(RwLock::new(token_state)));
         self.instance_url = Some(credentials.instance_url);
         self.tenant_id = Some(credentials.tenant_id);
 
@@ -361,7 +448,7 @@ impl Client {
         &self,
         credentials: &Credentials,
         http_client: &reqwest::Client,
-    ) -> Result<oauth2::StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>, Error> {
+    ) -> Result<SalesforceTokenResponse, Error> {
         let client_secret =
             credentials
                 .client_secret
@@ -400,7 +487,7 @@ impl Client {
         &self,
         credentials: &Credentials,
         http_client: &reqwest::Client,
-    ) -> Result<oauth2::StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>, Error> {
+    ) -> Result<SalesforceTokenResponse, Error> {
         let client_secret =
             credentials
                 .client_secret
@@ -451,6 +538,166 @@ impl Client {
             .request_async(http_client)
             .await
             .map_err(|e| Error::TokenExchange(Box::new(e)))
+    }
+
+    /// Refreshes the access token using the refresh token.
+    ///
+    /// This method is called automatically by [`access_token`](Self::access_token)
+    /// when the token is expired or about to expire.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No refresh token is available ([`Error::NoRefreshToken`])
+    /// - Token refresh fails ([`Error::TokenExchange`])
+    /// - Failed to acquire token state lock ([`Error::LockError`])
+    async fn refresh_token(&self) -> Result<(), Error> {
+        let token_state_arc = self.token_state.as_ref().ok_or(Error::NoRefreshToken)?;
+
+        // Read lock to get refresh token
+        let refresh_token = {
+            let state = token_state_arc.read().map_err(|_| Error::LockError)?;
+
+            state.refresh_token().ok_or(Error::NoRefreshToken)?.clone()
+        };
+
+        // Load credentials for OAuth2 client setup
+        let credentials = match &self.credentials_from {
+            CredentialsFrom::Value(creds) => creds.clone(),
+            CredentialsFrom::Path(path) => {
+                let credentials_string =
+                    fs::read_to_string(path).map_err(|e| Error::ReadCredentials {
+                        path: path.clone(),
+                        source: e,
+                    })?;
+                serde_json::from_str(&credentials_string)
+                    .map_err(|e| Error::ParseCredentials { source: e })?
+            }
+        };
+
+        let client_secret =
+            credentials
+                .client_secret
+                .as_ref()
+                .ok_or_else(|| Error::InvalidCredentials {
+                    flow: format!("{:?}", self.auth_flow),
+                    message: "client_secret is required for token refresh".to_string(),
+                })?;
+
+        // Build OAuth2 client
+        let oauth2_client = BasicClient::new(ClientId::new(credentials.client_id.clone()))
+            .set_client_secret(ClientSecret::new(client_secret.clone()))
+            .set_auth_uri(
+                AuthUrl::new(format!(
+                    "{}{}",
+                    credentials.instance_url, DEFAULT_AUTHORIZE_PATH
+                ))
+                .map_err(|e| Error::ParseUrl { source: e })?,
+            )
+            .set_token_uri(
+                TokenUrl::new(format!(
+                    "{}{}",
+                    credentials.instance_url, DEFAULT_TOKEN_PATH
+                ))
+                .map_err(|e| Error::ParseUrl { source: e })?,
+            );
+
+        // Create HTTP client
+        let http_client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| Error::TokenExchange(Box::new(e)))?;
+
+        // Exchange refresh token for new access token
+        let new_token_response = oauth2_client
+            .exchange_refresh_token(&refresh_token)
+            .request_async(&http_client)
+            .await
+            .map_err(|e| Error::TokenExchange(Box::new(e)))?;
+
+        // Update token state with write lock
+        let new_state = TokenState::new(new_token_response)?;
+        let mut state = token_state_arc.write().map_err(|_| Error::LockError)?;
+        *state = new_state;
+
+        Ok(())
+    }
+
+    /// Returns the current access token without refreshing.
+    ///
+    /// This is a synchronous method that returns the current token state.
+    /// Use [`access_token`](Self::access_token) for automatic refresh.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Client is not connected ([`Error::NoRefreshToken`])
+    /// - Failed to acquire token state lock ([`Error::LockError`])
+    pub fn current_access_token(&self) -> Result<String, Error> {
+        let token_state_arc = self.token_state.as_ref().ok_or(Error::NoRefreshToken)?;
+
+        let state = token_state_arc.read().map_err(|_| Error::LockError)?;
+
+        Ok(state.access_token().to_string())
+    }
+
+    /// Returns a valid access token, automatically refreshing if necessary.
+    ///
+    /// This method checks if the current token is expired or will expire soon
+    /// (within 5 minutes). If so, it automatically refreshes the token using
+    /// the refresh token before returning.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Client is not connected ([`Error::NoRefreshToken`])
+    /// - Token refresh fails when needed ([`Error::TokenExchange`])
+    /// - Failed to acquire token state lock ([`Error::LockError`])
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use salesforce_core::client::{self, Credentials};
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = client::Builder::new()
+    ///     .credentials(Credentials {
+    ///         client_id: "your_client_id".to_string(),
+    ///         client_secret: Some("your_client_secret".to_string()),
+    ///         username: None,
+    ///         password: None,
+    ///         instance_url: "https://your-instance.salesforce.com".to_string(),
+    ///         tenant_id: "your_tenant_id".to_string(),
+    ///     })
+    ///     .build()?
+    ///     .connect()
+    ///     .await?;
+    ///
+    /// // Get access token - automatically refreshes if expired
+    /// let token = client.access_token().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn access_token(&self) -> Result<String, Error> {
+        let token_state_arc = self.token_state.as_ref().ok_or(Error::NoRefreshToken)?;
+
+        // Check if token needs refresh
+        let needs_refresh = {
+            let state = token_state_arc.read().map_err(|_| Error::LockError)?;
+
+            state.is_expired(TOKEN_REFRESH_BUFFER_SECONDS)?
+        };
+
+        // Refresh if needed
+        if needs_refresh {
+            self.refresh_token().await?;
+        }
+
+        // Return access token
+        let state = token_state_arc.read().map_err(|_| Error::LockError)?;
+
+        Ok(state.access_token().to_string())
     }
 }
 
@@ -591,7 +838,7 @@ impl Builder {
                 Error::MissingRequiredAttribute("credentials or credentials_path".to_string())
             })?,
             auth_flow: self.auth_flow.unwrap_or_default(),
-            token_result: None,
+            token_state: None,
             instance_url: None,
             tenant_id: None,
         })

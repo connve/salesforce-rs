@@ -1,5 +1,4 @@
 use crate::client;
-use oauth2::TokenResponse;
 use salesforce_pubsub_v1::eventbus::v1::pub_sub_client::PubSubClient;
 use tokio_stream::StreamExt;
 
@@ -97,12 +96,11 @@ impl Context {
     ///
     /// Returns an error if the client is missing required authentication data.
     pub fn new(channel: tonic::transport::Channel, client: client::Client) -> Result<Self, Error> {
-        let auth_header: tonic::metadata::AsciiMetadataValue = client
-            .token_result
-            .as_ref()
-            .ok_or_else(Error::MissingTokenResponse)?
-            .access_token()
-            .secret()
+        let token = client
+            .current_access_token()
+            .map_err(|_| Error::MissingTokenResponse())?;
+
+        let auth_header: tonic::metadata::AsciiMetadataValue = token
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -329,7 +327,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = None; // Missing instance_url
         client.tenant_id = Some("test_tenant".to_string());
 
@@ -369,7 +369,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = Some("https://mydomain.salesforce.com".to_string());
         client.tenant_id = None; // Missing tenant_id
 
@@ -408,7 +410,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = Some("https://mydomain.salesforce.com".to_string());
         client.tenant_id = Some("test_tenant".to_string());
 
@@ -442,7 +446,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = Some("https://test.salesforce.com".to_string());
         client.tenant_id = Some("tenant123".to_string());
 
@@ -476,7 +482,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = Some("https://test.salesforce.com".to_string());
         client.tenant_id = Some("tenant123".to_string());
 
@@ -509,7 +517,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = Some("url\nwith\nnewlines".to_string());
         client.tenant_id = Some("tenant123".to_string());
 
@@ -542,7 +552,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = Some("https://test.salesforce.com".to_string());
         client.tenant_id = Some("tenant\nwith\nnewlines".to_string());
 
@@ -634,7 +646,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = Some("https://login.salesforce.com".to_string());
         client.tenant_id = Some("00Dxx0000001gPL".to_string());
 
@@ -727,7 +741,9 @@ mod tests {
             oauth2::basic::BasicTokenType::Bearer,
             EmptyExtraTokenFields {},
         );
-        client.token_result = Some(token);
+        // Create token state for testing
+        let token_state = crate::client::TokenState::new(token).unwrap();
+        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
         client.instance_url = Some("https://test.salesforce.com".to_string());
         client.tenant_id = Some("tenant123".to_string());
 
