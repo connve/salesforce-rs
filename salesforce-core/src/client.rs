@@ -641,11 +641,97 @@ impl Client {
         Ok(state.access_token().to_string())
     }
 
+    /// Forces a new token by reconnecting to Salesforce.
+    ///
+    /// This method performs a fresh OAuth2 authentication regardless of whether
+    /// the current token is expired. Use this when you receive INVALID_SESSION_ID
+    /// errors from Salesforce, which indicate the session was revoked due to:
+    /// - IP address restrictions
+    /// - Session security policy changes
+    /// - Manual session termination
+    /// - Other security-related invalidation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Client is not connected ([`Error::NoRefreshToken`])
+    /// - OAuth2 authentication fails ([`Error::TokenExchange`])
+    /// - Failed to acquire token state lock ([`Error::LockError`])
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use salesforce_core::client::{self, Credentials};
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut client = client::Builder::new()
+    ///     .credentials(Credentials {
+    ///         client_id: "your_client_id".to_string(),
+    ///         client_secret: Some("your_client_secret".to_string()),
+    ///         username: None,
+    ///         password: None,
+    ///         instance_url: "https://your-instance.salesforce.com".to_string(),
+    ///         tenant_id: "your_tenant_id".to_string(),
+    ///     })
+    ///     .build()?
+    ///     .connect()
+    ///     .await?;
+    ///
+    /// // Force new session after INVALID_SESSION_ID error
+    /// client.reconnect().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn reconnect(&mut self) -> Result<(), Error> {
+        // Load credentials
+        let credentials = match &self.credentials_from {
+            CredentialsFrom::Value(creds) => creds.clone(),
+            CredentialsFrom::Path(path) => {
+                let credentials_string =
+                    fs::read_to_string(path).map_err(|e| Error::ReadCredentials {
+                        path: path.clone(),
+                        source: e,
+                    })?;
+                serde_json::from_str(&credentials_string)
+                    .map_err(|e| Error::ParseCredentials { source: e })?
+            }
+        };
+
+        self.validate_credentials(&credentials)?;
+
+        // Create HTTP client
+        let http_client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| Error::TokenExchange(Box::new(e)))?;
+
+        // Perform fresh OAuth2 authentication
+        let token_response = match self.auth_flow {
+            AuthFlow::ClientCredentials => {
+                self.exchange_client_credentials(&credentials, &http_client)
+                    .await?
+            }
+            AuthFlow::UsernamePassword => {
+                self.exchange_password(&credentials, &http_client).await?
+            }
+        };
+
+        // Update token state
+        let token_state = TokenState::new(token_response)?;
+        self.token_state = Some(Arc::new(RwLock::new(token_state)));
+
+        Ok(())
+    }
+
     /// Returns a valid access token, automatically refreshing if necessary.
     ///
     /// This method checks if the current token is expired or will expire soon
     /// (within 5 minutes). If so, it automatically refreshes the token using
     /// the refresh token before returning.
+    ///
+    /// Note: This only handles token expiry. For INVALID_SESSION_ID errors
+    /// (session revoked), use [`reconnect`](Self::reconnect) instead.
     ///
     /// # Errors
     ///
@@ -1295,5 +1381,225 @@ mod tests {
             source: io_error,
         };
         assert!(error.source().is_some());
+    }
+
+    #[test]
+    fn test_token_state_creation() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::AccessToken;
+
+        let token_response = BasicTokenResponse::new(
+            AccessToken::new("test_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+
+        let result = TokenState::new(token_response);
+        assert!(result.is_ok());
+
+        let token_state = result.unwrap();
+        assert_eq!(token_state.access_token(), "test_token");
+    }
+
+    #[test]
+    fn test_token_state_with_expiry() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::AccessToken;
+        use std::time::Duration;
+
+        let mut token_response = BasicTokenResponse::new(
+            AccessToken::new("test_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        token_response.set_expires_in(Some(&Duration::from_secs(3600)));
+
+        let result = TokenState::new(token_response);
+        assert!(result.is_ok());
+
+        let token_state = result.unwrap();
+        let is_expired = token_state.is_expired(0);
+        assert!(is_expired.is_ok());
+        assert!(!is_expired.unwrap());
+    }
+
+    #[test]
+    fn test_token_state_expiry_check_with_buffer() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::AccessToken;
+        use std::time::Duration;
+
+        let mut token_response = BasicTokenResponse::new(
+            AccessToken::new("test_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        // Set token to expire in 1 second
+        token_response.set_expires_in(Some(&Duration::from_secs(1)));
+
+        let token_state = TokenState::new(token_response).unwrap();
+
+        // Check with 5 minute buffer - should be expired
+        let is_expired = token_state.is_expired(300);
+        assert!(is_expired.is_ok());
+        assert!(is_expired.unwrap());
+
+        // Check with 0 buffer - should not be expired yet
+        let is_expired = token_state.is_expired(0);
+        assert!(is_expired.is_ok());
+        assert!(!is_expired.unwrap());
+    }
+
+    #[test]
+    fn test_token_state_default_expiry() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::AccessToken;
+
+        // Token without explicit expiry should default to 2 hours
+        let token_response = BasicTokenResponse::new(
+            AccessToken::new("test_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+
+        let result = TokenState::new(token_response);
+        assert!(result.is_ok());
+
+        let token_state = result.unwrap();
+        // Should not be expired with 5 minute buffer
+        let is_expired = token_state.is_expired(TOKEN_REFRESH_BUFFER_SECONDS);
+        assert!(is_expired.is_ok());
+        assert!(!is_expired.unwrap());
+    }
+
+    #[test]
+    fn test_token_state_refresh_token() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::{AccessToken, RefreshToken};
+
+        let mut token_response = BasicTokenResponse::new(
+            AccessToken::new("test_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        token_response.set_refresh_token(Some(RefreshToken::new("refresh_token".to_string())));
+
+        let token_state = TokenState::new(token_response).unwrap();
+        assert!(token_state.refresh_token().is_some());
+        assert_eq!(
+            token_state.refresh_token().unwrap().secret(),
+            "refresh_token"
+        );
+    }
+
+    #[test]
+    fn test_token_state_no_refresh_token() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::AccessToken;
+
+        let token_response = BasicTokenResponse::new(
+            AccessToken::new("test_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+
+        let token_state = TokenState::new(token_response).unwrap();
+        assert!(token_state.refresh_token().is_none());
+    }
+
+    #[test]
+    fn test_current_access_token_without_connection() {
+        let client = Builder::new()
+            .credentials(Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        let result = client.current_access_token();
+        assert!(matches!(result, Err(Error::NoRefreshToken)));
+    }
+
+    #[tokio::test]
+    async fn test_access_token_without_connection() {
+        let client = Builder::new()
+            .credentials(Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        let result = client.access_token().await;
+        assert!(matches!(result, Err(Error::NoRefreshToken)));
+    }
+
+    #[tokio::test]
+    async fn test_reconnect_without_connection() {
+        let mut client = Builder::new()
+            .credentials(Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        // Reconnect should fail with token exchange error since we have invalid credentials
+        let result = client.reconnect().await;
+        assert!(matches!(
+            result,
+            Err(Error::TokenExchange(_)) | Err(Error::ParseUrl { .. })
+        ));
+    }
+
+    #[test]
+    fn test_error_display_messages() {
+        let error = Error::MissingRequiredAttribute("test_field".to_string());
+        assert_eq!(error.to_string(), "Missing required attribute: test_field");
+
+        let error = Error::TokenExpiryOverflow;
+        assert_eq!(error.to_string(), "Token expiry time calculation overflow");
+
+        let error = Error::TimeThresholdOverflow;
+        assert_eq!(error.to_string(), "Time threshold calculation overflow");
+
+        let error = Error::NoRefreshToken;
+        assert_eq!(
+            error.to_string(),
+            "Token refresh not available: no refresh token in response"
+        );
+
+        let error = Error::LockError;
+        assert_eq!(error.to_string(), "Failed to acquire lock on token state");
+    }
+
+    #[test]
+    fn test_builder_defaults() {
+        let creds = Credentials {
+            client_id: "test_id".to_string(),
+            client_secret: Some("test_secret".to_string()),
+            username: None,
+            password: None,
+            instance_url: "https://test.salesforce.com".to_string(),
+            tenant_id: "test_tenant".to_string(),
+        };
+
+        let client = Builder::new().credentials(creds).build().unwrap();
+
+        // Should default to ClientCredentials flow
+        assert_eq!(client.auth_flow, AuthFlow::ClientCredentials);
     }
 }
