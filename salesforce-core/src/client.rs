@@ -80,6 +80,7 @@ impl TokenState {
 
 /// Errors that can occur during client operations.
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Failed to read credentials file from disk.
     #[error("Failed to read credentials file at {path}: {source}")]
