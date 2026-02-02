@@ -1265,7 +1265,7 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "salesforce_core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "oauth2",
  "reqwest",
@@ -1282,7 +1282,7 @@ dependencies = [
 
 [[package]]
 name = "salesforce_pubsub_v1"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytes",
  "futures-util",

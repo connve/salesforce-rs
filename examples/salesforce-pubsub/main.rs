@@ -66,6 +66,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Client connected successfully");
 
+    // Example 4: Using automatic token refresh
+    // The client automatically refreshes tokens that expire within 5 minutes.
+    // This ensures you always have a valid token for API calls.
+    let fresh_token = client.access_token().await?;
+    info!("Got fresh access token: {}", &fresh_token[..20]); // Log first 20 chars
+
+    // If you encounter INVALID_SESSION_ID errors from Salesforce API calls,
+    // call access_token() to get a fresh token and retry your operation once.
+    // Example retry pattern in your application code:
+    //
+    // match salesforce_api_call(&token).await {
+    //     Err(e) if e.to_string().contains("INVALID_SESSION_ID") => {
+    //         info!("Session invalid, refreshing token and retrying...");
+    //         let fresh_token = client.access_token().await?;
+    //         salesforce_api_call(&fresh_token).await? // Retry once
+    //     }
+    //     result => result?,
+    // }
+
     // Connect to Pub/Sub API
     let channel = tonic::transport::Channel::from_static(eventbus::ENDPOINT)
         .connect()
