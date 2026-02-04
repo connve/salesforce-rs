@@ -29,7 +29,7 @@
 pub mod client;
 
 /// Salesforce Pub/Sub API for real-time event streaming.
-pub mod pubsub {
-    /// Pub/Sub context for managing gRPC connections and operations.
-    pub mod context;
-}
+pub mod pubsub;
+
+/// Salesforce Bulk API v2.0 for querying and ingesting large data sets.
+pub mod bulkapi;

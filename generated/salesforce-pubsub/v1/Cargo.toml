@@ -1,6 +1,6 @@
 
 [package]
-name = "salesforce_pubsub_v1"
+name = "salesforce-pubsub-v1"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

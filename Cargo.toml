@@ -1,9 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["salesforce-core", "generated/salesforce_pubsub/v1"]
+members = [
+    "salesforce-core",
+    "generated/salesforce-pubsub/v1",
+    "generated/salesforce-core/v1",
+]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 authors = ["CONNVE"]
 license = "MPL-2.0"
 edition = "2021"
@@ -31,3 +35,8 @@ thiserror = "2.0"
 url = "2.5"
 bytes = "1.5"
 tracing = "0.1"
+progenitor = "0.8"
+progenitor-client = "0.8"
+openapiv3 = "2.2"
+serde_yaml = "0.9"
+chrono = { version = "0.4", features = ["serde"] }

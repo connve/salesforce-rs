@@ -1,0 +1,564 @@
+openapi: 3.0.3
+info:
+  title: Salesforce REST API
+  description: |
+    Salesforce REST API including Bulk API v2.0 for programmatic access to
+    Salesforce data and metadata operations.
+  version: 1.0.0
+  contact:
+    name: Salesforce Developers
+    url: https://developer.salesforce.com
+
+servers:
+  - url: https://{instance}.salesforce.com/services/data/v{apiVersion}
+    description: Salesforce instance
+    variables:
+      instance:
+        default: yourinstance.my.salesforce
+        description: Your Salesforce instance domain
+      apiVersion:
+        default: "58.0"
+        description: Salesforce API version
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.0 Bearer token
+
+  schemas:
+    # Common Enums
+    JobState:
+      type: string
+      enum:
+        - Open
+        - UploadComplete
+        - InProgress
+        - JobComplete
+        - Failed
+        - Aborted
+      description: Current state of the job
+
+    QueryOperation:
+      type: string
+      enum:
+        - query
+        - queryAll
+      description: Type of query operation
+
+    IngestOperation:
+      type: string
+      enum:
+        - insert
+        - update
+        - upsert
+        - delete
+        - hardDelete
+      description: Type of ingest operation
+
+    ContentType:
+      type: string
+      enum:
+        - CSV
+      description: Format of the data
+
+    ColumnDelimiter:
+      type: string
+      enum:
+        - BACKQUOTE
+        - CARET
+        - COMMA
+        - PIPE
+        - SEMICOLON
+        - TAB
+      default: COMMA
+      description: CSV column delimiter
+
+    LineEnding:
+      type: string
+      enum:
+        - LF
+        - CRLF
+      default: LF
+      description: Line ending format
+
+    ConcurrencyMode:
+      type: string
+      enum:
+        - Parallel
+      description: Job processing concurrency mode
+
+    JobType:
+      type: string
+      enum:
+        - V2Query
+        - V2Ingest
+        - BigObjectIngest
+        - Classic
+      description: Type of bulk job
+
+    # Error Response
+    Error:
+      type: object
+      required:
+        - errorCode
+        - message
+      properties:
+        errorCode:
+          type: string
+          description: Error code identifier
+        message:
+          type: string
+          description: Descriptive error message
+
+    ErrorResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/Error'
+
+    # Query Job Schemas
+    CreateQueryJobRequest:
+      type: object
+      required:
+        - operation
+        - query
+      properties:
+        operation:
+          $ref: '#/components/schemas/QueryOperation'
+        query:
+          type: string
+          description: SOQL query string to execute
+          example: "SELECT Id, Name FROM Account WHERE Industry = 'Technology'"
+        contentType:
+          $ref: '#/components/schemas/ContentType'
+        columnDelimiter:
+          $ref: '#/components/schemas/ColumnDelimiter'
+        lineEnding:
+          $ref: '#/components/schemas/LineEnding'
+
+    QueryJobInfo:
+      type: object
+      required:
+        - id
+        - operation
+        - object
+        - createdById
+        - createdDate
+        - systemModstamp
+        - state
+        - concurrencyMode
+        - contentType
+        - apiVersion
+        - jobType
+      properties:
+        id:
+          type: string
+          description: Unique job identifier (18-character Salesforce ID)
+          example: "750xx0000000001AAA"
+        operation:
+          $ref: '#/components/schemas/QueryOperation'
+        object:
+          type: string
+          description: Salesforce object being queried (derived from SOQL)
+          example: "Account"
+        createdById:
+          type: string
+          description: User ID who created the job
+          example: "005xx000000000FAAQ"
+        createdDate:
+          type: string
+          format: date-time
+          description: Job creation timestamp in ISO 8601 format
+          example: "2024-01-15T10:30:00.000Z"
+        systemModstamp:
+          type: string
+          format: date-time
+          description: Last modified timestamp in ISO 8601 format
+          example: "2024-01-15T10:30:00.000Z"
+        state:
+          $ref: '#/components/schemas/JobState'
+        concurrencyMode:
+          $ref: '#/components/schemas/ConcurrencyMode'
+        contentType:
+          $ref: '#/components/schemas/ContentType'
+        apiVersion:
+          type: number
+          format: float
+          description: API version used for the job
+          example: 58.0
+        jobType:
+          $ref: '#/components/schemas/JobType'
+        lineEnding:
+          $ref: '#/components/schemas/LineEnding'
+        columnDelimiter:
+          $ref: '#/components/schemas/ColumnDelimiter'
+        numberRecordsProcessed:
+          type: integer
+          description: Number of records processed (only present after job completion)
+          example: 1000
+        retries:
+          type: integer
+          description: Number of retry attempts
+          example: 0
+        totalProcessingTime:
+          type: integer
+          description: Total processing time in milliseconds
+          example: 249
+
+    # Ingest Job Schemas
+    CreateIngestJobRequest:
+      type: object
+      required:
+        - object
+        - operation
+      properties:
+        object:
+          type: string
+          description: Salesforce object API name
+          example: "Account"
+        operation:
+          $ref: '#/components/schemas/IngestOperation'
+        contentType:
+          $ref: '#/components/schemas/ContentType'
+        externalIdFieldName:
+          type: string
+          description: External ID field name (required for upsert operations)
+          example: "ExternalId__c"
+        assignmentRuleId:
+          type: string
+          description: Assignment rule ID for Cases or Leads
+          example: "01Qxx000000000FEAQ"
+        columnDelimiter:
+          $ref: '#/components/schemas/ColumnDelimiter'
+        lineEnding:
+          $ref: '#/components/schemas/LineEnding'
+
+    IngestJobInfo:
+      type: object
+      required:
+        - id
+        - operation
+        - object
+        - createdById
+        - createdDate
+        - systemModstamp
+        - state
+        - concurrencyMode
+        - contentType
+        - apiVersion
+        - jobType
+      properties:
+        id:
+          type: string
+          description: Unique job identifier (18-character Salesforce ID)
+          example: "750xx0000000002AAA"
+        operation:
+          $ref: '#/components/schemas/IngestOperation'
+        object:
+          type: string
+          description: Salesforce object API name
+          example: "Account"
+        createdById:
+          type: string
+          description: User ID who created the job
+          example: "005xx000000000FAAQ"
+        createdDate:
+          type: string
+          format: date-time
+          description: Job creation timestamp in ISO 8601 format
+          example: "2024-01-15T10:30:00.000Z"
+        systemModstamp:
+          type: string
+          format: date-time
+          description: Last modified timestamp in ISO 8601 format
+          example: "2024-01-15T10:30:00.000Z"
+        state:
+          $ref: '#/components/schemas/JobState'
+        externalIdFieldName:
+          type: string
+          description: External ID field name (if specified for upsert)
+          example: "ExternalId__c"
+        concurrencyMode:
+          $ref: '#/components/schemas/ConcurrencyMode'
+        contentType:
+          $ref: '#/components/schemas/ContentType'
+        apiVersion:
+          type: number
+          format: float
+          description: API version used for the job
+          example: 58.0
+        contentUrl:
+          type: string
+          description: Relative URL to upload data
+          example: "services/data/v58.0/jobs/ingest/750xx0000000002AAA/batches"
+        jobType:
+          $ref: '#/components/schemas/JobType'
+        lineEnding:
+          $ref: '#/components/schemas/LineEnding'
+        columnDelimiter:
+          $ref: '#/components/schemas/ColumnDelimiter'
+        numberRecordsProcessed:
+          type: integer
+          description: Number of records processed
+          example: 5000
+        numberRecordsFailed:
+          type: integer
+          description: Number of records that failed
+          example: 10
+        retries:
+          type: integer
+          description: Number of retry attempts
+          example: 0
+        totalProcessingTime:
+          type: integer
+          description: Total processing time in milliseconds
+          example: 12500
+        apiActiveProcessingTime:
+          type: integer
+          description: API processing time in milliseconds
+          example: 8200
+        apexProcessingTime:
+          type: integer
+          description: Apex trigger/workflow time in milliseconds
+          example: 3100
+
+paths:
+  /jobs/query:
+    post:
+      summary: Create Query Job
+      description: |
+        Creates a new bulk query job to asynchronously query large data sets.
+        The job uses SOQL to define the data to extract.
+      operationId: createQueryJob
+      tags:
+        - BulkQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQueryJobRequest'
+      responses:
+        '201':
+          description: Query job created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryJobInfo'
+        '400':
+          description: Bad request (invalid input)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/query/{jobId}:
+    get:
+      summary: Get Query Job Information
+      description: |
+        Retrieves detailed information about a specific query job including its current state
+        and processing metrics.
+      operationId: getQueryJob
+      tags:
+        - BulkQuery
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the query job
+          schema:
+            type: string
+          example: "750xx0000000001AAA"
+      responses:
+        '200':
+          description: Query job information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryJobInfo'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/query/{jobId}/results:
+    get:
+      summary: Get Query Job Results
+      description: |
+        Retrieves the results of a completed query job. Results are returned in CSV format.
+        For large result sets, use pagination with the locator parameter.
+      operationId: getQueryJobResults
+      tags:
+        - BulkQuery
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the query job
+          schema:
+            type: string
+          example: "750xx0000000001AAA"
+        - name: maxRecords
+          in: query
+          required: false
+          description: Maximum number of records to return per request
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50000
+            default: 50000
+          example: 5000
+        - name: locator
+          in: query
+          required: false
+          description: |
+            Locator value for pagination. Use the value from the Sforce-Locator header
+            of the previous response to retrieve the next page of results.
+          schema:
+            type: string
+          example: "null"
+      responses:
+        '200':
+          description: Query results retrieved successfully
+          headers:
+            Sforce-Locator:
+              description: |
+                Locator for the next page of results. Value is "null" if this is the last page.
+              schema:
+                type: string
+              example: "null"
+            Sforce-NumberOfRecords:
+              description: Number of records included in this response
+              schema:
+                type: integer
+              example: 1000
+          content:
+            text/csv:
+              schema:
+                type: string
+                description: CSV data with query results
+              example: |
+                "Id","Name","Industry"
+                "001xx000000001AAA","Acme Corp","Technology"
+                "001xx000000002AAA","Global Inc","Finance"
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found or results not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/ingest:
+    post:
+      summary: Create Ingest Job
+      description: |
+        Creates a new bulk ingest job to load, update, upsert, or delete large data sets.
+        After creating the job, upload data and then close the job to begin processing.
+      operationId: createIngestJob
+      tags:
+        - BulkIngest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIngestJobRequest'
+      responses:
+        '201':
+          description: Ingest job created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestJobInfo'
+        '400':
+          description: Bad request (invalid input)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/ingest/{jobId}:
+    get:
+      summary: Get Ingest Job Information
+      description: |
+        Retrieves detailed information about a specific ingest job including its current state
+        and processing metrics.
+      operationId: getIngestJob
+      tags:
+        - BulkIngest
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the ingest job
+          schema:
+            type: string
+          example: "750xx0000000002AAA"
+      responses:
+        '200':
+          description: Ingest job information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestJobInfo'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: BulkQuery
+    description: Bulk API v2.0 operations for querying large data sets asynchronously
+  - name: BulkIngest
+    description: Bulk API v2.0 operations for loading, updating, or deleting large data sets

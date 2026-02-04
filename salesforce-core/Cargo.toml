@@ -10,18 +10,23 @@ publish.workspace = true
 name = "salesforce_core"
 path = "src/lib.rs"
 
+[features]
+trace = []
+
 [dependencies]
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
-salesforce_pubsub_v1 = { path = "../generated/salesforce_pubsub/v1" }
+salesforce_pubsub_v1 = { package = "salesforce-pubsub-v1", path = "../generated/salesforce-pubsub/v1" }
+salesforce_core_v1 = { path = "../generated/salesforce-core/v1" }
 oauth2 = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
+futures-util = { workspace = true }
 
 [[example]]
 name = "salesforce-pubsub"

@@ -1,5 +1,5 @@
 use salesforce_core::client::{self, AuthFlow, Credentials};
-use salesforce_core::pubsub::context::Context;
+use salesforce_core::pubsub::Client;
 use salesforce_pubsub_v1::eventbus;
 use std::env;
 use std::path::PathBuf;
@@ -92,9 +92,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect()
         .await?;
 
-    let mut context = Context::new(channel, client)?;
+    let mut context = Client::new(channel, client)?;
 
-    info!("Pub/Sub context created");
+    info!("Pub/Sub client created");
 
     // Example: Get topic information
     let topic_request = eventbus::v1::TopicRequest {

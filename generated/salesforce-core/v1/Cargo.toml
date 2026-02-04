@@ -1,0 +1,27 @@
+[package]
+name = "salesforce_core_v1"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+name = "salesforce_core_v1"
+path = "src/lib.rs"
+
+[dependencies]
+bytes = { workspace = true }
+futures-util = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+progenitor-client = { workspace = true }
+chrono = { workspace = true }
+
+[build-dependencies]
+progenitor = { workspace = true }
+openapiv3 = { workspace = true }
+serde_yaml = { workspace = true }
