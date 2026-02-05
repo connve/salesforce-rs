@@ -17,7 +17,7 @@ servers:
         default: yourinstance.my.salesforce
         description: Your Salesforce instance domain
       apiVersion:
-        default: "58.0"
+        default: "65.0"
         description: Salesforce API version
 
 security:
@@ -190,7 +190,7 @@ components:
           type: number
           format: float
           description: API version used for the job
-          example: 58.0
+          example: 65.0
         jobType:
           $ref: '#/components/schemas/JobType'
         lineEnding:
@@ -209,6 +209,60 @@ components:
           type: integer
           description: Total processing time in milliseconds
           example: 249
+        isPkChunkingSupported:
+          type: boolean
+          description: Whether PK chunking is supported for the queried object
+          example: true
+
+    QueryJobList:
+      type: object
+      required:
+        - done
+        - records
+      properties:
+        done:
+          type: boolean
+          description: Whether there are more records beyond this page
+          example: true
+        records:
+          type: array
+          description: List of query jobs
+          items:
+            $ref: '#/components/schemas/QueryJobInfo'
+        nextRecordsUrl:
+          type: string
+          description: URL to retrieve the next page of results (if done is false)
+          example: "/services/data/v65.0/jobs/query?locator=xxx"
+
+    QueryResultPage:
+      type: object
+      required:
+        - resultUrl
+      properties:
+        resultUrl:
+          type: string
+          description: The request URI with the locator for getting data
+          example: "/services/data/v65.0/jobs/query/750R0000000zxr8IAA/results?locator=aBcDeFg4N"
+
+    QueryResultPages:
+      type: object
+      required:
+        - resultPages
+        - done
+      properties:
+        resultPages:
+          type: array
+          description: Contains the resultUrl URIs (up to 5 per response)
+          items:
+            $ref: '#/components/schemas/QueryResultPage'
+        nextRecordsUrl:
+          type: string
+          description: The URI used to get the next set of resultPages
+          example: "/services/data/v65.0/jobs/query/750R0000000zxr8IAA/resultPages?locator=YcApWm4N"
+        done:
+          type: boolean
+          description: A Boolean value that indicates whether more resultUrl URIs are available
+          example: false
 
     # Ingest Job Schemas
     CreateIngestJobRequest:
@@ -291,11 +345,11 @@ components:
           type: number
           format: float
           description: API version used for the job
-          example: 58.0
+          example: 65.0
         contentUrl:
           type: string
           description: Relative URL to upload data
-          example: "services/data/v58.0/jobs/ingest/750xx0000000002AAA/batches"
+          example: "services/data/v65.0/jobs/ingest/750xx0000000002AAA/batches"
         jobType:
           $ref: '#/components/schemas/JobType'
         lineEnding:
@@ -326,9 +380,66 @@ components:
           type: integer
           description: Apex trigger/workflow time in milliseconds
           example: 3100
+        assignmentRuleId:
+          type: string
+          description: The ID of an assignment rule for Cases or Leads
+          example: "01Qxx000000000FEAQ"
+        errorMessage:
+          type: string
+          description: Error message for jobs with errors
 
 paths:
   /jobs/query:
+    get:
+      summary: Get All Query Jobs
+      description: |
+        Retrieves information about all query jobs in the org. Results can be filtered
+        by query parameters.
+      operationId: getAllQueryJobs
+      tags:
+        - BulkQuery
+      parameters:
+        - name: isPkChunkingEnabled
+          in: query
+          required: false
+          description: Filter jobs by whether PK chunking is enabled (applies to Bulk API jobs only)
+          schema:
+            type: boolean
+          example: false
+        - name: jobType
+          in: query
+          required: false
+          description: Filter by job type
+          schema:
+            $ref: '#/components/schemas/JobType'
+          example: "V2Query"
+        - name: concurrencyMode
+          in: query
+          required: false
+          description: For future use. Filter by concurrency mode (currently only parallel is supported)
+          schema:
+            $ref: '#/components/schemas/ConcurrencyMode'
+          example: "Parallel"
+        - name: queryLocator
+          in: query
+          required: false
+          description: Pagination locator. Use the value from nextRecordsUrl from the previous response.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Query jobs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryJobList'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     post:
       summary: Create Query Job
       description: |
@@ -389,6 +500,89 @@ paths:
       responses:
         '200':
           description: Query job information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryJobInfo'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete Query Job
+      description: |
+        Deletes a query job. Once deleted, the job cannot be retrieved.
+      operationId: deleteQueryJob
+      tags:
+        - BulkQuery
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the query job to delete
+          schema:
+            type: string
+          example: "750xx0000000001AAA"
+      responses:
+        '204':
+          description: Query job deleted successfully
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Abort Query Job
+      description: |
+        Aborts a query job by changing its state to Aborted. This stops processing
+        but does not delete the job.
+      operationId: abortQueryJob
+      tags:
+        - BulkQuery
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the query job to abort
+          schema:
+            type: string
+          example: "750xx0000000001AAA"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - state
+              properties:
+                state:
+                  type: string
+                  enum:
+                    - Aborted
+                  description: Must be set to "Aborted" to abort the job
+            example:
+              state: "Aborted"
+      responses:
+        '200':
+          description: Query job aborted successfully
           content:
             application/json:
               schema:
@@ -479,7 +673,113 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /jobs/query/{jobId}/resultPages:
+    get:
+      summary: Get Parallel Results for a Query Job
+      description: |
+        Returns up to five URIs in one response to use to get results for a query job in parallel.
+        The job must have the state jobComplete. Use the same API version that you used to create
+        the query, otherwise the call returns a 409 error.
+      operationId: getQueryJobResultPages
+      tags:
+        - BulkQuery
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the query job
+          schema:
+            type: string
+          example: "750R0000000zxr8IAA"
+        - name: locator
+          in: query
+          required: false
+          description: Locator for pagination of result pages
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Result pages retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResultPages'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found or not complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: API version mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /jobs/ingest:
+    get:
+      summary: Get Information About All Ingest Jobs
+      description: |
+        Retrieves detailed information about all ingest jobs in the org. Job records are
+        returned in an indeterminate order.
+      operationId: getAllIngestJobs
+      tags:
+        - BulkIngest
+      parameters:
+        - name: isPkChunkingEnabled
+          in: query
+          required: false
+          description: Filter jobs by whether PK chunking is enabled
+          schema:
+            type: boolean
+        - name: jobType
+          in: query
+          required: false
+          description: Filter by job type
+          schema:
+            $ref: '#/components/schemas/JobType'
+        - name: queryLocator
+          in: query
+          required: false
+          description: Pagination locator from nextRecordsUrl
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ingest jobs retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - done
+                  - records
+                properties:
+                  done:
+                    type: boolean
+                    description: Whether there are more jobs beyond this page
+                  records:
+                    type: array
+                    description: List of ingest jobs
+                    items:
+                      $ref: '#/components/schemas/IngestJobInfo'
+                  nextRecordsUrl:
+                    type: string
+                    description: URL to retrieve the next page of results
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     post:
       summary: Create Ingest Job
       description: |
@@ -546,6 +846,256 @@ paths:
                 $ref: '#/components/schemas/IngestJobInfo'
         '401':
           description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update Ingest Job State
+      description: |
+        Updates the state of an ingest job. Use this to mark a job as UploadComplete
+        (ready for processing) or Aborted (cancel processing).
+      operationId: updateIngestJobState
+      tags:
+        - BulkIngest
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the ingest job
+          schema:
+            type: string
+          example: "750xx0000000002AAA"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - state
+              properties:
+                state:
+                  $ref: '#/components/schemas/JobState'
+                  description: Use UploadComplete to mark ready for processing, or Aborted to cancel
+      responses:
+        '200':
+          description: Job state updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestJobInfo'
+        '400':
+          description: Bad request (invalid state transition)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete Ingest Job
+      description: |
+        Deletes an ingest job. The job must be in UploadComplete, JobComplete, Aborted, or Failed state.
+        When deleted, job data and metadata are permanently removed.
+      operationId: deleteIngestJob
+      tags:
+        - BulkIngest
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the ingest job to delete
+          schema:
+            type: string
+          example: "750xx0000000002AAA"
+      responses:
+        '204':
+          description: Job deleted successfully
+        '400':
+          description: Bad request (job in invalid state for deletion)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/ingest/{jobId}/batches:
+    put:
+      summary: Upload Job Data
+      description: |
+        Uploads CSV data for the ingest job. The data must not exceed 100 MB to account
+        for base64 encoding (which can increase size by ~50%).
+      operationId: uploadIngestJobData
+      tags:
+        - BulkIngest
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the ingest job
+          schema:
+            type: string
+          example: "750xx0000000002AAA"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              description: CSV data with records to process
+      responses:
+        '201':
+          description: Data uploaded successfully
+        '400':
+          description: Bad request (invalid CSV data or job not in Open state)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/ingest/{jobId}/successfulResults:
+    get:
+      summary: Get Job Successful Record Results
+      description: |
+        Retrieves a CSV file containing all successfully processed records for a completed job.
+      operationId: getIngestJobSuccessfulResults
+      tags:
+        - BulkIngest
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the ingest job
+          schema:
+            type: string
+          example: "750xx0000000002AAA"
+      responses:
+        '200':
+          description: Successful results retrieved
+          content:
+            text/csv:
+              schema:
+                type: string
+                description: CSV data with sf__Created, sf__Id, and original fields
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found or not complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/ingest/{jobId}/failedResults:
+    get:
+      summary: Get Job Failed Record Results
+      description: |
+        Retrieves a CSV file containing all failed records with error information for a completed job.
+      operationId: getIngestJobFailedResults
+      tags:
+        - BulkIngest
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the ingest job
+          schema:
+            type: string
+          example: "750xx0000000002AAA"
+      responses:
+        '200':
+          description: Failed results retrieved
+          content:
+            text/csv:
+              schema:
+                type: string
+                description: CSV data with sf__Error, sf__Id, and original fields
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Job not found or not complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /jobs/ingest/{jobId}/unprocessedrecords:
+    get:
+      summary: Get Job Unprocessed Record Results
+      description: |
+        Retrieves a CSV file containing all unprocessed records for failed or aborted jobs.
+      operationId: getIngestJobUnprocessedResults
+      tags:
+        - BulkIngest
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          description: The unique identifier of the ingest job
+          schema:
+            type: string
+          example: "750xx0000000002AAA"
+      responses:
+        '200':
+          description: Unprocessed results retrieved
+          content:
+            text/csv:
+              schema:
+                type: string
+                description: CSV data with original fields for unprocessed records
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:

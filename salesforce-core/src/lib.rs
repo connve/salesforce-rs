@@ -25,6 +25,9 @@
 //! # }
 //! ```
 
+/// Default Salesforce API version (Winter '26 - API version 65.0).
+pub const DEFAULT_API_VERSION: &str = "65.0";
+
 /// OAuth2 client authentication and connection management.
 pub mod client;
 

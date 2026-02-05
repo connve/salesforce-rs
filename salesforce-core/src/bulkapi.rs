@@ -27,7 +27,7 @@
 //!     .await?;
 //!
 //! // Create Bulk API client
-//! let bulk_client = BulkClient::new(auth_client, "58.0");
+//! let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
 //!
 //! // Use query and ingest operations
 //! let query_client = bulk_client.query();

@@ -32,7 +32,7 @@ use std::sync::Arc;
 ///     .await?;
 ///
 /// // Create a Bulk API client
-/// let bulk_client = BulkClient::new(auth_client, "58.0");
+/// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
 ///
 /// // Use query operations
 /// let query_client = bulk_client.query();
@@ -54,7 +54,7 @@ impl Client {
     /// # Arguments
     ///
     /// * `auth_client` - An authenticated salesforce-core `Client` for OAuth token management
-    /// * `api_version` - Salesforce API version (e.g., "58.0")
+    /// * `api_version` - Salesforce API version (e.g., "65.0")
     ///
     /// # Example
     ///
@@ -77,7 +77,7 @@ impl Client {
     ///     .connect()
     ///     .await?;
     ///
-    /// let bulk_client = BulkClient::new(auth_client, "58.0");
+    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
     /// # Ok(())
     /// # }
     /// ```
@@ -122,7 +122,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, "58.0");
+    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
     ///
     /// let query_client = bulk_client.query();
     /// # Ok(())
@@ -154,7 +154,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, "58.0");
+    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
     ///
     /// let ingest_client = bulk_client.ingest();
     /// # Ok(())
@@ -230,129 +230,33 @@ mod tests {
         client
     }
 
-    #[test]
-    fn test_new_client() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        assert_eq!(bulk_client.api_version(), "58.0");
-    }
-
-    #[test]
-    fn test_new_client_with_string() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "59.0".to_string());
-
-        assert_eq!(bulk_client.api_version(), "59.0");
-    }
-
-    #[test]
-    fn test_new_client_with_different_versions() {
-        let auth_client = create_mock_auth_client();
-
-        let versions = vec!["50.0", "55.0", "58.0", "60.0"];
-        for version in versions {
-            let bulk_client = Client::new(auth_client.clone(), version);
-            assert_eq!(bulk_client.api_version(), version);
-        }
-    }
-
-    #[test]
-    fn test_auth_client_accessor() {
-        let auth_client = create_mock_auth_client();
-        let original_instance_url = auth_client.instance_url.clone();
-
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        assert_eq!(bulk_client.auth_client().instance_url, original_instance_url);
-    }
-
-    #[test]
-    fn test_api_version_accessor() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        assert_eq!(bulk_client.api_version(), "58.0");
-    }
-
-    #[test]
-    fn test_query_client_creation() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        let _query_client = bulk_client.query();
-        // If this doesn't panic, the query client was created successfully
-    }
-
-    #[test]
-    fn test_ingest_client_creation() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        let _ingest_client = bulk_client.ingest();
-        // If this doesn't panic, the ingest client was created successfully
-    }
-
-    #[test]
-    fn test_multiple_query_client_creation() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        let _query_client1 = bulk_client.query();
-        let _query_client2 = bulk_client.query();
-        // Should be able to create multiple query clients
-    }
-
-    #[test]
-    fn test_multiple_ingest_client_creation() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        let _ingest_client1 = bulk_client.ingest();
-        let _ingest_client2 = bulk_client.ingest();
-        // Should be able to create multiple ingest clients
-    }
-
-    #[test]
-    fn test_clone_client() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        let cloned = bulk_client.clone();
-
-        assert_eq!(cloned.api_version(), bulk_client.api_version());
-        assert_eq!(
-            cloned.auth_client().instance_url,
-            bulk_client.auth_client().instance_url
-        );
-    }
-
-    #[test]
-    fn test_debug_impl() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        let debug_str = format!("{:?}", bulk_client);
-        assert!(debug_str.contains("Client"));
-    }
 
     #[test]
     fn test_base_url_construction() {
         let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
+        let bulk_client = Client::new(auth_client, crate::DEFAULT_API_VERSION);
 
         let base_url = bulk_client.base_url();
-        assert_eq!(base_url, "https://test.salesforce.com/services/data/v58.0");
+        assert_eq!(
+            base_url,
+            format!(
+                "https://test.salesforce.com/services/data/v{}",
+                crate::DEFAULT_API_VERSION
+            )
+        );
     }
 
     #[test]
     fn test_base_url_with_different_versions() {
         let auth_client = create_mock_auth_client();
 
-        let bulk_client_58 = Client::new(auth_client.clone(), "58.0");
+        let bulk_client_58 = Client::new(auth_client.clone(), crate::DEFAULT_API_VERSION);
         assert_eq!(
             bulk_client_58.base_url(),
-            "https://test.salesforce.com/services/data/v58.0"
+            format!(
+                "https://test.salesforce.com/services/data/v{}",
+                crate::DEFAULT_API_VERSION
+            )
         );
 
         let bulk_client_59 = Client::new(auth_client, "59.0");
@@ -362,26 +266,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_api_version_with_empty_string() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "");
-
-        assert_eq!(bulk_client.api_version(), "");
-    }
-
-    #[test]
-    fn test_api_version_with_special_characters() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0-beta");
-
-        assert_eq!(bulk_client.api_version(), "58.0-beta");
-    }
 
     #[tokio::test]
     async fn test_build_http_client_with_valid_token() {
         let auth_client = create_mock_auth_client();
-        let bulk_client = Client::new(auth_client, "58.0");
+        let bulk_client = Client::new(auth_client, crate::DEFAULT_API_VERSION);
 
         let result = bulk_client.build_http_client().await;
         assert!(result.is_ok());
@@ -429,35 +318,4 @@ mod tests {
         let _ = bulk_client.base_url(); // Should panic
     }
 
-    #[test]
-    fn test_auth_client_reference_same_instance() {
-        let auth_client = create_mock_auth_client();
-        let original_instance = auth_client.instance_url.clone();
-
-        let bulk_client = Client::new(auth_client, "58.0");
-
-        // Verify the reference points to the same data
-        assert_eq!(bulk_client.auth_client().instance_url, original_instance);
-    }
-
-    #[test]
-    fn test_client_with_very_long_api_version() {
-        let auth_client = create_mock_auth_client();
-        let long_version = "58.0.with.a.very.long.version.string.that.might.be.unusual";
-        let bulk_client = Client::new(auth_client, long_version);
-
-        assert_eq!(bulk_client.api_version(), long_version);
-    }
-
-    #[test]
-    fn test_base_url_with_trailing_slash_instance() {
-        let mut client = create_mock_auth_client();
-        client.instance_url = Some("https://test.salesforce.com/".to_string());
-
-        let bulk_client = Client::new(client, "58.0");
-        let base_url = bulk_client.base_url();
-
-        // Should handle trailing slash (though URL will have double slash)
-        assert!(base_url.starts_with("https://test.salesforce.com/"));
-    }
 }

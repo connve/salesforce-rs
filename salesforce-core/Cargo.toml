@@ -29,5 +29,9 @@ tracing = { workspace = true }
 futures-util = { workspace = true }
 
 [[example]]
-name = "salesforce-pubsub"
-path = "../examples/salesforce-pubsub/main.rs"
+name = "pubsub"
+path = "../examples/salesforce-core/pubsub.rs"
+
+[[example]]
+name = "bulkapi"
+path = "../examples/salesforce-core/bulkapi.rs"

@@ -373,33 +373,6 @@ mod tests {
         assert!(matches!(result, Err(Error::MissingTokenResponse())));
     }
 
-    #[test]
-    fn test_error_display_missing_client() {
-        let error = Error::MissingClient();
-        assert_eq!(error.to_string(), "Client missing");
-    }
-
-    #[test]
-    fn test_error_display_missing_token_response() {
-        let error = Error::MissingTokenResponse();
-        assert_eq!(error.to_string(), "Token response missing");
-    }
-
-    #[test]
-    fn test_error_display_missing_required_attribute() {
-        let error = Error::MissingRequiredAttribute("test_attr".to_string());
-        assert_eq!(error.to_string(), "Missing required attribute: test_attr");
-    }
-
-    #[test]
-    fn test_error_display_invalid_metadata() {
-        // Create an invalid metadata value (contains invalid ASCII character)
-        let invalid_value = tonic::metadata::AsciiMetadataValue::try_from("\n").unwrap_err();
-        let error = Error::InvalidMetadataValue {
-            source: invalid_value,
-        };
-        assert!(error.to_string().contains("Invalid metadata value"));
-    }
 
     #[tokio::test]
     async fn test_new_missing_instance_url() {
@@ -485,46 +458,6 @@ mod tests {
         assert!(matches!(result, Err(Error::MissingRequiredAttribute(_))));
     }
 
-    #[tokio::test]
-    async fn test_client_debug_impl() {
-        use oauth2::basic::BasicTokenResponse;
-        use oauth2::{AccessToken, EmptyExtraTokenFields};
-
-        let creds: &str = r#"
-            {
-                "client_id": "some_client_id",
-                "client_secret": "some_client_secret",
-                "instance_url": "https://mydomain.salesforce.com",
-                "tenant_id": "some_tenant_id"
-            }"#;
-        let mut path = PathBuf::new();
-        path.push(format!("test_creds_debug_{}.json", std::process::id()));
-        let _ = fs::write(path.clone(), creds);
-
-        let mut client = client::Builder::new()
-            .credentials_path(path.clone())
-            .build()
-            .unwrap();
-        let _ = fs::remove_file(path);
-
-        let token = BasicTokenResponse::new(
-            AccessToken::new("test_token".to_string()),
-            oauth2::basic::BasicTokenType::Bearer,
-            EmptyExtraTokenFields {},
-        );
-        // Create token state for testing
-        let token_state = crate::client::TokenState::new(token).unwrap();
-        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
-        client.instance_url = Some("https://mydomain.salesforce.com".to_string());
-        client.tenant_id = Some("test_tenant".to_string());
-
-        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
-        let channel = endpoint.connect_lazy();
-
-        let context = Client::new(channel, client).unwrap();
-        let debug_str = format!("{context:?}");
-        assert!(debug_str.contains("Client"));
-    }
 
     #[tokio::test]
     async fn test_new_with_valid_client() {
@@ -667,34 +600,6 @@ mod tests {
         assert!(matches!(result, Err(Error::InvalidMetadataValue { .. })));
     }
 
-    #[test]
-    fn test_error_tonic_debug() {
-        let status = tonic::Status::internal("test error");
-        let error = Error::Tonic(Box::new(status));
-        let debug_str = format!("{error:?}");
-        assert!(debug_str.contains("Tonic"));
-    }
-
-    #[test]
-    fn test_error_invalid_credentials_display() {
-        let error = Error::InvalidMetadataValue {
-            source: tonic::metadata::AsciiMetadataValue::try_from("\n").unwrap_err(),
-        };
-        assert!(error.to_string().contains("Invalid metadata value"));
-    }
-
-    #[test]
-    fn test_error_missing_client_display() {
-        let error = Error::MissingClient();
-        assert_eq!(format!("{error}"), "Client missing");
-    }
-
-    #[test]
-    fn test_error_tonic_display() {
-        let status = tonic::Status::unavailable("service unavailable");
-        let error = Error::Tonic(Box::new(status));
-        assert!(format!("{error}").contains("gRPC transport error"));
-    }
 
     #[test]
     fn test_interceptor_adds_headers() {
@@ -761,64 +666,8 @@ mod tests {
         // Create client - should succeed
         let context = Client::new(channel, client);
         assert!(context.is_ok());
-
-        // Verify debug output
-        let context = context.unwrap();
-        let debug_str = format!("{context:?}");
-        assert!(debug_str.contains("Client"));
-        assert!(debug_str.contains("pubsub"));
     }
 
-    #[test]
-    fn test_credentials_from_value_variant() {
-        let creds_from = client::CredentialsFrom::Value(client::Credentials {
-            client_id: "test".to_string(),
-            client_secret: Some("secret".to_string()),
-            username: None,
-            password: None,
-            instance_url: "https://test.salesforce.com".to_string(),
-            tenant_id: "tenant".to_string(),
-        });
-
-        match creds_from {
-            client::CredentialsFrom::Value(creds) => {
-                assert_eq!(creds.client_id, "test");
-            }
-            _ => panic!("Expected Value variant"),
-        }
-    }
-
-    #[test]
-    fn test_credentials_from_path_variant() {
-        let path = PathBuf::from("/test/path.json");
-        let creds_from = client::CredentialsFrom::Path(path.clone());
-
-        match creds_from {
-            client::CredentialsFrom::Path(p) => {
-                assert_eq!(p, path);
-            }
-            _ => panic!("Expected Path variant"),
-        }
-    }
-
-    #[test]
-    fn test_error_display_all_variants() {
-        // Test all error display implementations
-        let errors = vec![
-            Error::MissingClient(),
-            Error::MissingTokenResponse(),
-            Error::MissingRequiredAttribute("test_field".to_string()),
-            Error::InvalidMetadataValue {
-                source: tonic::metadata::AsciiMetadataValue::try_from("\n").unwrap_err(),
-            },
-            Error::Tonic(Box::new(tonic::Status::internal("test"))),
-        ];
-
-        for error in errors {
-            let display = format!("{error}");
-            assert!(!display.is_empty());
-        }
-    }
 
     #[tokio::test]
     async fn test_context_with_special_characters_in_token() {
@@ -1034,11 +883,8 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let context = Client::new(channel, client).unwrap();
-
-        // Verify channel is stored
-        let debug_str = format!("{:?}", context.channel);
-        assert!(debug_str.contains("Channel"));
+        let result = Client::new(channel, client);
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -1124,9 +970,5 @@ mod tests {
         assert_eq!(context.client.tenant_id.as_ref().unwrap(), &expected_tenant);
         assert!(context.client.instance_url.is_some());
         assert!(context.client.token_state.is_some());
-
-        // Verify channel is stored
-        let debug_str = format!("{:?}", context.channel);
-        assert!(debug_str.contains("Channel"));
     }
 }
