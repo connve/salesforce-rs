@@ -19,9 +19,11 @@
 //! - Managing ingest jobs
 
 use futures_util::StreamExt;
-use salesforce_core::bulkapi::Client as BulkClient;
+use salesforce_core::bulkapi::{
+    Client as BulkClient, CreateIngestJobRequest, CreateQueryJobRequest, IngestOperation,
+    QueryOperation,
+};
 use salesforce_core::client::{self, Credentials};
-use salesforce_core_v1::types::{CreateQueryJobRequest, QueryOperation};
 use tracing::{error, info};
 
 #[tokio::main]
@@ -65,15 +67,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Current state: {:?}", status.state);
 
         match status.state {
-            salesforce_core_v1::types::JobState::JobComplete => {
+            salesforce_core::bulkapi::JobState::JobComplete => {
                 info!("Job completed");
                 break;
             }
-            salesforce_core_v1::types::JobState::Failed => {
+            salesforce_core::bulkapi::JobState::Failed => {
                 error!("Job failed");
                 return Ok(());
             }
-            salesforce_core_v1::types::JobState::Aborted => {
+            salesforce_core::bulkapi::JobState::Aborted => {
                 error!("Job was aborted");
                 return Ok(());
             }
@@ -122,11 +124,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Creating an ingest job");
     let ingest_job = ingest_client
-        .create_job(&salesforce_core_v1::types::CreateIngestJobRequest {
+        .create_job(&CreateIngestJobRequest {
             object: "Account".to_string(),
             external_id_field_name: None,
-            content_type: Some(salesforce_core_v1::types::ContentType::Csv),
-            operation: salesforce_core_v1::types::IngestOperation::Insert,
+            content_type: Some(salesforce_core::bulkapi::ContentType::Csv),
+            operation: IngestOperation::Insert,
             line_ending: None,
             column_delimiter: None,
             assignment_rule_id: None,
@@ -149,15 +151,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Current state: {:?}", status.state);
 
         match status.state {
-            salesforce_core_v1::types::JobState::JobComplete => {
+            salesforce_core::bulkapi::JobState::JobComplete => {
                 info!("Ingest job completed");
                 break;
             }
-            salesforce_core_v1::types::JobState::Failed => {
+            salesforce_core::bulkapi::JobState::Failed => {
                 error!("Job failed: {:?}", status.error_message);
                 break;
             }
-            salesforce_core_v1::types::JobState::Aborted => {
+            salesforce_core::bulkapi::JobState::Aborted => {
                 error!("Job was aborted");
                 break;
             }
@@ -196,11 +198,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Creating an ingest job to abort");
     let abort_ingest_job = ingest_client
-        .create_job(&salesforce_core_v1::types::CreateIngestJobRequest {
+        .create_job(&CreateIngestJobRequest {
             object: "Contact".to_string(),
             external_id_field_name: None,
-            content_type: Some(salesforce_core_v1::types::ContentType::Csv),
-            operation: salesforce_core_v1::types::IngestOperation::Insert,
+            content_type: Some(salesforce_core::bulkapi::ContentType::Csv),
+            operation: IngestOperation::Insert,
             line_ending: None,
             column_delimiter: None,
             assignment_rule_id: None,

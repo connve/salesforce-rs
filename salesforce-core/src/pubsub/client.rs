@@ -60,8 +60,7 @@ impl tonic::service::Interceptor for ContextInterceptor {
 ///
 /// ```no_run
 /// use salesforce_core::client;
-/// use salesforce_core::pubsub::Client;
-/// use salesforce_pubsub_v1::eventbus;
+/// use salesforce_core::pubsub::{Client, ENDPOINT};
 /// use std::path::PathBuf;
 ///
 /// # #[tokio::main]
@@ -72,7 +71,7 @@ impl tonic::service::Interceptor for ContextInterceptor {
 ///     .connect()
 ///     .await?;
 ///
-/// let channel = tonic::transport::Channel::from_static(eventbus::ENDPOINT)
+/// let channel = tonic::transport::Channel::from_static(ENDPOINT)
 ///     .connect()
 ///     .await?;
 ///
@@ -156,8 +155,7 @@ impl Client {
     ///
     /// ```no_run
     /// use salesforce_core::client;
-    /// use salesforce_core::pubsub::Client;
-    /// use salesforce_pubsub_v1::eventbus;
+    /// use salesforce_core::pubsub::{Client, ENDPOINT};
     /// use std::path::PathBuf;
     ///
     /// # #[tokio::main]
@@ -168,7 +166,7 @@ impl Client {
     ///     .connect()
     ///     .await?;
     ///
-    /// let channel = tonic::transport::Channel::from_static(eventbus::ENDPOINT)
+    /// let channel = tonic::transport::Channel::from_static(ENDPOINT)
     ///     .connect()
     ///     .await?;
     ///

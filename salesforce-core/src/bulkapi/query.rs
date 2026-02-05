@@ -33,10 +33,8 @@ impl QueryClient {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::bulkapi::QueryOperation;
-    /// use salesforce_core_v1::types::CreateQueryJobRequest;
+    /// use salesforce_core::bulkapi::{Client as BulkClient, CreateQueryJobRequest, QueryOperation};
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {

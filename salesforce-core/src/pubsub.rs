@@ -33,3 +33,9 @@
 mod client;
 
 pub use client::{Client, Error};
+
+/// Re-export commonly used types from the generated gRPC client.
+pub use salesforce_pubsub_v1::eventbus::{self, v1::*};
+
+/// Constant for the Pub/Sub API endpoint.
+pub use salesforce_pubsub_v1::eventbus::ENDPOINT;

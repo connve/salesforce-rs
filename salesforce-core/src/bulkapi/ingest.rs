@@ -36,10 +36,8 @@ impl IngestClient {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::bulkapi::IngestOperation;
-    /// use salesforce_core_v1::types::CreateIngestJobRequest;
+    /// use salesforce_core::bulkapi::{Client as BulkClient, CreateIngestJobRequest, IngestOperation};
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {

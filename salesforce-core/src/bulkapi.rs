@@ -44,6 +44,25 @@ pub use client::Client;
 
 /// Re-export commonly used types from the generated client.
 pub use salesforce_core_v1::types::{
-    ColumnDelimiter, ContentType, JobState, JobType, LineEnding,
-    QueryOperation, IngestOperation, ConcurrencyMode,
+    // Enums
+    ColumnDelimiter,
+    ConcurrencyMode,
+    ContentType,
+    IngestOperation,
+    JobState,
+    JobType,
+    LineEnding,
+    QueryOperation,
+    // Query types
+    CreateQueryJobRequest,
+    QueryJobInfo,
+    QueryJobList,
+    QueryResultPages,
+    // Ingest types
+    CreateIngestJobRequest,
+    GetAllIngestJobsResponse,
+    IngestJobInfo,
 };
+
+/// Re-export ByteStream for handling streaming results.
+pub use salesforce_core_v1::ByteStream;
