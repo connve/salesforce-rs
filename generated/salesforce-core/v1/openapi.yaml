@@ -533,6 +533,12 @@ paths:
       responses:
         '204':
           description: Query job deleted successfully
+        '400':
+          description: Bad request (job cannot be deleted in current state)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized (invalid or missing access token)
           content:
@@ -585,6 +591,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueryJobInfo'
+        '400':
+          description: Bad request (invalid state or job cannot be aborted)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized (invalid or missing access token)
           content:
@@ -658,6 +670,12 @@ paths:
                 "Id","Name","Industry"
                 "001xx000000001AAA","Acme Corp","Technology"
                 "001xx000000002AAA","Global Inc","Finance"
+        '400':
+          description: Bad request (invalid parameters or job not complete)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized (invalid or missing access token)
           content:
@@ -973,6 +991,8 @@ paths:
               format: binary
               description: CSV data with records to process
       responses:
+        '200':
+          description: Data uploaded successfully
         '201':
           description: Data uploaded successfully
         '400':
