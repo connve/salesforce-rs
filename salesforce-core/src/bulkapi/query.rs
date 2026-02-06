@@ -33,7 +33,7 @@ impl QueryClient {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::bulkapi::{Builder, CreateQueryJobRequest, QueryOperation};
+    /// use salesforce_core::bulkapi::{ClientBuilder, CreateQueryJobRequest, QueryOperation};
     /// # use salesforce_core::client::{self, Credentials};
     ///
     /// # #[tokio::main]
@@ -50,7 +50,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let job = query_client
@@ -98,7 +98,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -113,7 +113,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let job_info = query_client.get_job("750xx0000000001AAA").await?;
@@ -158,7 +158,7 @@ impl QueryClient {
     /// ```no_run
     /// use futures_util::StreamExt;
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -173,7 +173,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let mut results = query_client
@@ -222,7 +222,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -237,7 +237,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// query_client.delete_job("750xx0000000001AAA").await?;
@@ -278,7 +278,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -293,7 +293,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let job_info = query_client.abort_job("750xx0000000001AAA").await?;
@@ -344,7 +344,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -359,7 +359,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let jobs = query_client.get_all_jobs(None, None, None, None).await?;
@@ -413,7 +413,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -428,7 +428,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let result_pages = query_client.get_result_pages("750R0000000zxr8IAA", None).await?;

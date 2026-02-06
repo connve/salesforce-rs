@@ -13,7 +13,7 @@ use std::sync::Arc;
 ///
 /// ```no_run
 /// use salesforce_core::client::{self, Credentials};
-/// use salesforce_core::bulkapi::Builder;
+/// use salesforce_core::bulkapi::ClientBuilder;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,10 +32,10 @@ use std::sync::Arc;
 ///     .await?;
 ///
 /// // Create a Bulk API client with default API version
-/// let bulk_client = Builder::new(auth_client.clone()).build();
+/// let bulk_client = ClientBuilder::new(auth_client.clone()).build();
 ///
 /// // Or specify a custom API version
-/// let bulk_client_custom = Builder::new(auth_client)
+/// let bulk_client_custom = ClientBuilder::new(auth_client)
 ///     .api_version("64.0")
 ///     .build();
 ///
@@ -55,12 +55,12 @@ pub struct Client {
 
 /// Builder for creating a Bulk API client.
 #[derive(Debug)]
-pub struct Builder {
+pub struct ClientBuilder {
     auth_client: client::Client,
     api_version: Option<String>,
 }
 
-impl Builder {
+impl ClientBuilder {
     /// Creates a new builder for the Bulk API client.
     ///
     /// # Arguments
@@ -75,7 +75,7 @@ impl Builder {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::bulkapi::Builder;
+    /// use salesforce_core::bulkapi::ClientBuilder;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -93,10 +93,10 @@ impl Builder {
     ///     .await?;
     ///
     /// // Use default API version
-    /// let bulk_client = Builder::new(auth_client.clone()).build();
+    /// let bulk_client = ClientBuilder::new(auth_client.clone()).build();
     ///
     /// // Or specify a custom version
-    /// let bulk_client_custom = Builder::new(auth_client)
+    /// let bulk_client_custom = ClientBuilder::new(auth_client)
     ///     .api_version("64.0")
     ///     .build();
     /// # Ok(())
@@ -124,7 +124,7 @@ impl Builder {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -139,7 +139,7 @@ impl Builder {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client)
+    /// let bulk_client = ClientBuilder::new(auth_client)
     ///     .api_version("64.0")
     ///     .build();
     /// # Ok(())
@@ -162,7 +162,7 @@ impl Builder {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -177,7 +177,7 @@ impl Builder {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     /// # Ok(())
     /// # }
     /// ```
@@ -210,7 +210,7 @@ impl Client {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -225,7 +225,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     ///
     /// let query_client = bulk_client.query();
     /// # Ok(())
@@ -242,7 +242,7 @@ impl Client {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Builder;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -257,7 +257,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = Builder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build();
     ///
     /// let ingest_client = bulk_client.ingest();
     /// # Ok(())
@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn test_base_url_construction() {
         let auth_client = create_mock_auth_client();
-        let bulk_client = Builder::new(auth_client).build();
+        let bulk_client = ClientBuilder::new(auth_client).build();
 
         let base_url = bulk_client.base_url().unwrap();
         assert_eq!(
@@ -354,7 +354,7 @@ mod tests {
     fn test_base_url_with_different_versions() {
         let auth_client = create_mock_auth_client();
 
-        let bulk_client_default = Builder::new(auth_client.clone()).build();
+        let bulk_client_default = ClientBuilder::new(auth_client.clone()).build();
         assert_eq!(
             bulk_client_default.base_url().unwrap(),
             format!(
@@ -363,7 +363,7 @@ mod tests {
             )
         );
 
-        let bulk_client_59 = Builder::new(auth_client).api_version("59.0").build();
+        let bulk_client_59 = ClientBuilder::new(auth_client).api_version("59.0").build();
         assert_eq!(
             bulk_client_59.base_url().unwrap(),
             "https://test.salesforce.com/services/data/v59.0"
@@ -373,7 +373,7 @@ mod tests {
     #[tokio::test]
     async fn test_build_http_client_with_valid_token() {
         let auth_client = create_mock_auth_client();
-        let bulk_client = Builder::new(auth_client).build();
+        let bulk_client = ClientBuilder::new(auth_client).build();
 
         let result = bulk_client.build_http_client().await;
         assert!(result.is_ok());
@@ -393,7 +393,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let bulk_client = Builder::new(client).api_version("58.0").build();
+        let bulk_client = ClientBuilder::new(client).api_version("58.0").build();
         let result = bulk_client.build_http_client().await;
 
         assert!(result.is_err());
@@ -416,7 +416,7 @@ mod tests {
         // Manually clear instance_url to simulate unconnected state
         client.instance_url = None;
 
-        let bulk_client = Builder::new(client).api_version("58.0").build();
+        let bulk_client = ClientBuilder::new(client).api_version("58.0").build();
         let result = bulk_client.base_url();
 
         assert!(result.is_err());

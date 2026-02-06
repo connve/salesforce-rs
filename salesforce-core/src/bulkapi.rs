@@ -8,7 +8,7 @@
 //!
 //! ```no_run
 //! use salesforce_core::client::{self, Credentials};
-//! use salesforce_core::bulkapi::Builder;
+//! use salesforce_core::bulkapi::ClientBuilder;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,10 +27,10 @@
 //!     .await?;
 //!
 //! // Create Bulk API client with default API version (v65.0)
-//! let bulk_client = Builder::new(auth_client.clone()).build();
+//! let bulk_client = ClientBuilder::new(auth_client.clone()).build();
 //!
 //! // Or specify a custom API version
-//! let bulk_client_custom = Builder::new(auth_client)
+//! let bulk_client_custom = ClientBuilder::new(auth_client)
 //!     .api_version("64.0")
 //!     .build();
 //!
@@ -45,7 +45,7 @@ mod client;
 pub mod query;
 pub mod ingest;
 
-pub use client::{Builder, Client};
+pub use client::{Client, ClientBuilder};
 
 /// Re-export error types from query and ingest modules.
 pub use ingest::Error as IngestError;
