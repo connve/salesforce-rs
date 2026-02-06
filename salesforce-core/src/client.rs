@@ -75,6 +75,9 @@ pub enum Error {
     /// Failed to acquire lock on token state.
     #[error("Failed to acquire lock on token state")]
     LockError,
+    /// Client is not connected - call connect() before using.
+    #[error("Client is not connected. Call connect() first to authenticate and retrieve instance URL.")]
+    NotConnected,
 }
 
 /// Type alias for Salesforce OAuth2 token response using standard fields.
@@ -811,6 +814,10 @@ pub struct Builder {
 
 impl Builder {
     /// Creates a new builder.
+    ///
+    /// # Returns
+    ///
+    /// A `Builder` instance for configuring the Salesforce client.
     pub fn new() -> Self {
         Self::default()
     }
@@ -830,6 +837,10 @@ impl Builder {
     /// ```
     ///
     /// For [`AuthFlow::UsernamePassword`], also include `username` and `password`.
+    ///
+    /// # Returns
+    ///
+    /// `Self` for method chaining.
     pub fn credentials_path(mut self, path: PathBuf) -> Self {
         self.credentials_from = Some(CredentialsFrom::Path(path));
         self
@@ -839,6 +850,10 @@ impl Builder {
     ///
     /// Provide a [`Credentials`] struct with the appropriate fields populated
     /// for your chosen authentication flow.
+    ///
+    /// # Returns
+    ///
+    /// `Self` for method chaining.
     pub fn credentials(mut self, credentials: Credentials) -> Self {
         self.credentials_from = Some(CredentialsFrom::Value(credentials));
         self
@@ -852,12 +867,20 @@ impl Builder {
     ///
     /// - [`AuthFlow::ClientCredentials`] - Server-to-server authentication
     /// - [`AuthFlow::UsernamePassword`] - User authentication with username and password
+    ///
+    /// # Returns
+    ///
+    /// `Self` for method chaining.
     pub fn auth_flow(mut self, auth_flow: AuthFlow) -> Self {
         self.auth_flow = Some(auth_flow);
         self
     }
 
     /// Builds the client.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the configured `Client` if successful.
     ///
     /// # Errors
     ///

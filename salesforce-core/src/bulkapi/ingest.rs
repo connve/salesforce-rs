@@ -36,7 +36,7 @@ impl IngestClient {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::bulkapi::{Client as BulkClient, CreateIngestJobRequest, IngestOperation};
+    /// use salesforce_core::bulkapi::{Builder, CreateIngestJobRequest, IngestOperation};
     /// # use salesforce_core::client::{self, Credentials};
     ///
     /// # #[tokio::main]
@@ -53,7 +53,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job = ingest_client
@@ -83,7 +83,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .create_ingest_job(request)
@@ -107,7 +108,7 @@ impl IngestClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -122,7 +123,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.get_job("750xx0000000002AAA").await?;
@@ -139,7 +140,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_ingest_job(job_id)
@@ -162,7 +164,7 @@ impl IngestClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -177,7 +179,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let csv_data = b"Name,Phone\nAcme Inc,555-1234\nGlobal Corp,555-5678";
@@ -192,7 +194,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         client
             .upload_ingest_job_data(job_id, csv_data.to_vec())
@@ -217,7 +220,7 @@ impl IngestClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -232,7 +235,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.mark_upload_complete("750xx0000000002AAA").await?;
@@ -249,7 +252,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .update_ingest_job_state(
@@ -280,7 +284,7 @@ impl IngestClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -295,7 +299,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.abort_job("750xx0000000002AAA").await?;
@@ -312,7 +316,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .update_ingest_job_state(
@@ -339,7 +344,7 @@ impl IngestClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -354,7 +359,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// ingest_client.delete_job("750xx0000000002AAA").await?;
@@ -368,7 +373,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         client
             .delete_ingest_job(job_id)
@@ -394,7 +400,7 @@ impl IngestClient {
     /// ```no_run
     /// use futures_util::StreamExt;
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -409,7 +415,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_successful_results("750xx0000000002AAA").await?;
@@ -430,7 +436,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_ingest_job_successful_results(job_id)
@@ -456,7 +463,7 @@ impl IngestClient {
     /// ```no_run
     /// use futures_util::StreamExt;
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -471,7 +478,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_failed_results("750xx0000000002AAA").await?;
@@ -492,7 +499,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_ingest_job_failed_results(job_id)
@@ -518,7 +526,7 @@ impl IngestClient {
     /// ```no_run
     /// use futures_util::StreamExt;
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -533,7 +541,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_unprocessed_results("750xx0000000002AAA").await?;
@@ -554,7 +562,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_ingest_job_unprocessed_results(job_id)
@@ -581,7 +590,7 @@ impl IngestClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -596,7 +605,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let jobs = ingest_client.get_all_jobs(None, None, None).await?;
@@ -619,7 +628,8 @@ impl IngestClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_all_ingest_jobs(is_pk_chunking_enabled, job_type, query_locator)

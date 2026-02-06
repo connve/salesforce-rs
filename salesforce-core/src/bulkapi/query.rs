@@ -33,7 +33,7 @@ impl QueryClient {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::bulkapi::{Client as BulkClient, CreateQueryJobRequest, QueryOperation};
+    /// use salesforce_core::bulkapi::{Builder, CreateQueryJobRequest, QueryOperation};
     /// # use salesforce_core::client::{self, Credentials};
     ///
     /// # #[tokio::main]
@@ -50,7 +50,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let job = query_client
@@ -74,7 +74,8 @@ impl QueryClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .create_query_job(request)
@@ -97,7 +98,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -112,7 +113,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let job_info = query_client.get_job("750xx0000000001AAA").await?;
@@ -127,7 +128,8 @@ impl QueryClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_query_job(job_id)
@@ -156,7 +158,7 @@ impl QueryClient {
     /// ```no_run
     /// use futures_util::StreamExt;
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -171,7 +173,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let mut results = query_client
@@ -198,7 +200,8 @@ impl QueryClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_query_job_results(job_id, locator, max_records)
@@ -219,7 +222,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -234,7 +237,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// query_client.delete_job("750xx0000000001AAA").await?;
@@ -248,7 +251,8 @@ impl QueryClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         client
             .delete_query_job(job_id)
@@ -274,7 +278,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -289,7 +293,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let job_info = query_client.abort_job("750xx0000000001AAA").await?;
@@ -306,7 +310,8 @@ impl QueryClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .abort_query_job(
@@ -339,7 +344,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -354,7 +359,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let jobs = query_client.get_all_jobs(None, None, None, None).await?;
@@ -378,7 +383,8 @@ impl QueryClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_all_query_jobs(concurrency_mode, is_pk_chunking_enabled, job_type, query_locator)
@@ -407,7 +413,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// # use salesforce_core::client::{self, Credentials};
-    /// # use salesforce_core::bulkapi::Client as BulkClient;
+    /// # use salesforce_core::bulkapi::Builder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let auth_client = client::Builder::new()
@@ -422,7 +428,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = BulkClient::new(auth_client, salesforce_core::DEFAULT_API_VERSION);
+    /// let bulk_client = Builder::new(auth_client).build();
     /// let query_client = bulk_client.query();
     ///
     /// let result_pages = query_client.get_result_pages("750R0000000zxr8IAA", None).await?;
@@ -445,7 +451,8 @@ impl QueryClient {
             .build_http_client()
             .await
             .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&self.bulk_client.base_url(), http_client);
+        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
             .get_query_job_result_pages(job_id, locator)
