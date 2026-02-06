@@ -455,7 +455,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateQueryJobRequest'
       responses:
-        '201':
+        '200':
           description: Query job created successfully
           content:
             application/json:
@@ -795,7 +795,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateIngestJobRequest'
       responses:
-        '201':
+        '200':
           description: Ingest job created successfully
           content:
             application/json:
