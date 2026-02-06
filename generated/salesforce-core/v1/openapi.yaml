@@ -154,7 +154,6 @@ components:
         - concurrencyMode
         - contentType
         - apiVersion
-        - jobType
       properties:
         id:
           type: string
@@ -305,7 +304,6 @@ components:
         - concurrencyMode
         - contentType
         - apiVersion
-        - jobType
       properties:
         id:
           type: string
