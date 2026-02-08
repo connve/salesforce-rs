@@ -8,13 +8,15 @@ use tokio_stream::StreamExt;
 pub enum Error {
     /// Client is missing or not initialized.
     #[error("Client missing")]
-    MissingClient(),
+    MissingClient,
     /// OAuth2 token is missing from client.
     #[error("Token response missing")]
-    MissingTokenResponse(),
+    MissingTokenResponse,
     /// Required client attribute is missing.
-    #[error("Missing required attribute: {}", _0)]
-    MissingRequiredAttribute(String),
+    #[error("Missing required attribute: {attribute}")]
+    MissingRequiredAttribute {
+        attribute: String,
+    },
     /// Failed to create valid gRPC metadata from client credentials.
     #[error("Invalid metadata value for gRPC headers: {source}")]
     InvalidMetadataValue {
@@ -101,7 +103,7 @@ impl Client {
     pub fn new(channel: tonic::transport::Channel, client: client::Client) -> Result<Self, Error> {
         let token = client
             .current_access_token()
-            .map_err(|_| Error::MissingTokenResponse())?;
+            .map_err(|_| Error::MissingTokenResponse)?;
 
         let auth_header: tonic::metadata::AsciiMetadataValue = token
             .parse()
@@ -110,14 +112,14 @@ impl Client {
         let instance_url: tonic::metadata::AsciiMetadataValue = client
             .instance_url
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute("instance_url".to_string()))?
+            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "instance_url".to_string() })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
         let tenant_id: tonic::metadata::AsciiMetadataValue = client
             .tenant_id
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute("tenant_id".to_string()))?
+            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "tenant_id".to_string() })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -189,7 +191,7 @@ impl Client {
         let token = self
             .client
             .current_access_token()
-            .map_err(|_| Error::MissingTokenResponse())?;
+            .map_err(|_| Error::MissingTokenResponse)?;
 
         let auth_header: tonic::metadata::AsciiMetadataValue = token
             .parse()
@@ -199,7 +201,7 @@ impl Client {
             .client
             .instance_url
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute("instance_url".to_string()))?
+            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "instance_url".to_string() })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -207,7 +209,7 @@ impl Client {
             .client
             .tenant_id
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute("tenant_id".to_string()))?
+            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "tenant_id".to_string() })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -368,7 +370,7 @@ mod tests {
             .unwrap();
         let _ = fs::remove_file(path);
         let result = Client::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingTokenResponse())));
+        assert!(matches!(result, Err(Error::MissingTokenResponse)));
     }
 
 
@@ -411,7 +413,7 @@ mod tests {
         let channel = endpoint.connect_lazy();
 
         let result = Client::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingRequiredAttribute(_))));
+        assert!(matches!(result, Err(Error::MissingRequiredAttribute { .. })));
     }
 
     #[tokio::test]
@@ -453,7 +455,7 @@ mod tests {
         let channel = endpoint.connect_lazy();
 
         let result = Client::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingRequiredAttribute(_))));
+        assert!(matches!(result, Err(Error::MissingRequiredAttribute { .. })));
     }
 
 
@@ -723,7 +725,7 @@ mod tests {
 
         // Should fail due to missing token
         let result = Client::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingTokenResponse())));
+        assert!(matches!(result, Err(Error::MissingTokenResponse)));
     }
 
     #[tokio::test]

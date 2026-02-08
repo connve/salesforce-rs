@@ -32,7 +32,8 @@
 
 mod client;
 
-pub use client::{Client, Error};
+pub use client::Client;
+pub use client::Error as PubSubError;
 
 /// Re-export commonly used types from the generated gRPC client.
 pub use salesforce_pubsub_v1::eventbus::{self, v1::*};

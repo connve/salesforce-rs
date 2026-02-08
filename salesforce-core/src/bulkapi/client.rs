@@ -283,7 +283,7 @@ impl Client {
         reqwest::Client::builder()
             .default_headers(headers)
             .build()
-            .map_err(|e| client::Error::TokenExchange(Box::new(e)))
+            .map_err(|e| client::Error::TokenExchange { source: Box::new(e) })
     }
 
     /// Internal helper to get the base URL for Bulk API.

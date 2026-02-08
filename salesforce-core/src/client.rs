@@ -1,15 +1,10 @@
-use oauth2::basic::{BasicClient, BasicTokenType};
-use oauth2::{
-    AuthUrl, ClientId, ClientSecret, EmptyExtraTokenFields, RefreshToken, TokenResponse, TokenUrl,
-};
+use oauth2::basic::BasicTokenType;
+use oauth2::{EmptyExtraTokenFields, RefreshToken, TokenResponse};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-/// Default OAuth2 authorization endpoint path.
-const DEFAULT_AUTHORIZE_PATH: &str = "/services/oauth2/authorize";
 
 /// Default OAuth2 token endpoint path.
 const DEFAULT_TOKEN_PATH: &str = "/services/oauth2/token";
@@ -43,11 +38,22 @@ pub enum Error {
         source: url::ParseError,
     },
     /// OAuth2 token exchange failed during authentication.
-    #[error("OAuth2 token exchange failed: {0:?}")]
-    TokenExchange(Box<dyn std::error::Error + Send + Sync>),
+    #[error("OAuth2 token exchange failed: {source}")]
+    TokenExchange {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    /// HTTP request failed during OAuth2 token exchange.
+    #[error("OAuth2 request failed with status {status}: {body}")]
+    OAuth2RequestFailed {
+        status: u16,
+        body: String,
+    },
     /// Required builder parameter was not provided.
-    #[error("Missing required attribute: {}", _0)]
-    MissingRequiredAttribute(String),
+    #[error("Missing required attribute: {attribute}")]
+    MissingRequiredAttribute {
+        attribute: String,
+    },
     /// Client secret is required for this authentication flow.
     #[error("Client secret is required for authentication")]
     MissingClientSecret,
@@ -406,7 +412,7 @@ impl Client {
         let http_client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .map_err(|e| Error::TokenExchange(Box::new(e)))?;
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
 
         let token_response = match self.auth_flow {
             AuthFlow::ClientCredentials => {
@@ -434,28 +440,32 @@ impl Client {
     ) -> Result<SalesforceTokenResponse, Error> {
         let client_secret = credentials.client_secret.as_ref().ok_or(Error::MissingClientSecret)?;
 
-        let oauth2_client = BasicClient::new(ClientId::new(credentials.client_id.clone()))
-            .set_client_secret(ClientSecret::new(client_secret.clone()))
-            .set_auth_uri(
-                AuthUrl::new(format!(
-                    "{}{}",
-                    credentials.instance_url, DEFAULT_AUTHORIZE_PATH
-                ))
-                .map_err(|e| Error::ParseUrl { source: e })?,
-            )
-            .set_token_uri(
-                TokenUrl::new(format!(
-                    "{}{}",
-                    credentials.instance_url, DEFAULT_TOKEN_PATH
-                ))
-                .map_err(|e| Error::ParseUrl { source: e })?,
-            );
+        let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
-        oauth2_client
-            .exchange_client_credentials()
-            .request_async(http_client)
+        let response = http_client
+            .post(&token_url)
+            .form(&[
+                ("grant_type", "client_credentials"),
+                ("client_id", &credentials.client_id),
+                ("client_secret", client_secret),
+            ])
+            .send()
             .await
-            .map_err(|e| Error::TokenExchange(Box::new(e)))
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+
+        let status = response.status();
+        let body = response.text().await
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+
+        if !status.is_success() {
+            return Err(Error::OAuth2RequestFailed {
+                status: status.as_u16(),
+                body,
+            });
+        }
+
+        serde_json::from_str(&body)
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })
     }
 
     /// Performs OAuth2 Resource Owner Password Credentials flow.
@@ -468,31 +478,34 @@ impl Client {
         let username = credentials.username.as_ref().ok_or(Error::MissingUsername)?;
         let password = credentials.password.as_ref().ok_or(Error::MissingPassword)?;
 
-        let oauth2_client = BasicClient::new(ClientId::new(credentials.client_id.clone()))
-            .set_client_secret(ClientSecret::new(client_secret.clone()))
-            .set_auth_uri(
-                AuthUrl::new(format!(
-                    "{}{}",
-                    credentials.instance_url, DEFAULT_AUTHORIZE_PATH
-                ))
-                .map_err(|e| Error::ParseUrl { source: e })?,
-            )
-            .set_token_uri(
-                TokenUrl::new(format!(
-                    "{}{}",
-                    credentials.instance_url, DEFAULT_TOKEN_PATH
-                ))
-                .map_err(|e| Error::ParseUrl { source: e })?,
-            );
+        let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
-        oauth2_client
-            .exchange_password(
-                &oauth2::ResourceOwnerUsername::new(username.clone()),
-                &oauth2::ResourceOwnerPassword::new(password.clone()),
-            )
-            .request_async(http_client)
+        let response = http_client
+            .post(&token_url)
+            .form(&[
+                ("grant_type", "password"),
+                ("client_id", &credentials.client_id),
+                ("client_secret", client_secret),
+                ("username", username),
+                ("password", password),
+            ])
+            .send()
             .await
-            .map_err(|e| Error::TokenExchange(Box::new(e)))
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+
+        let status = response.status();
+        let body = response.text().await
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+
+        if !status.is_success() {
+            return Err(Error::OAuth2RequestFailed {
+                status: status.as_u16(),
+                body,
+            });
+        }
+
+        serde_json::from_str(&body)
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })
     }
 
     /// Refreshes the access token using the refresh token.
@@ -532,36 +545,40 @@ impl Client {
 
         let client_secret = credentials.client_secret.as_ref().ok_or(Error::MissingClientSecret)?;
 
-        // Build OAuth2 client
-        let oauth2_client = BasicClient::new(ClientId::new(credentials.client_id.clone()))
-            .set_client_secret(ClientSecret::new(client_secret.clone()))
-            .set_auth_uri(
-                AuthUrl::new(format!(
-                    "{}{}",
-                    credentials.instance_url, DEFAULT_AUTHORIZE_PATH
-                ))
-                .map_err(|e| Error::ParseUrl { source: e })?,
-            )
-            .set_token_uri(
-                TokenUrl::new(format!(
-                    "{}{}",
-                    credentials.instance_url, DEFAULT_TOKEN_PATH
-                ))
-                .map_err(|e| Error::ParseUrl { source: e })?,
-            );
+        let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
         // Create HTTP client
         let http_client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .map_err(|e| Error::TokenExchange(Box::new(e)))?;
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
 
         // Exchange refresh token for new access token
-        let new_token_response = oauth2_client
-            .exchange_refresh_token(&refresh_token)
-            .request_async(&http_client)
+        let response = http_client
+            .post(&token_url)
+            .form(&[
+                ("grant_type", "refresh_token"),
+                ("client_id", &credentials.client_id),
+                ("client_secret", client_secret),
+                ("refresh_token", refresh_token.secret()),
+            ])
+            .send()
             .await
-            .map_err(|e| Error::TokenExchange(Box::new(e)))?;
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+
+        let status = response.status();
+        let body = response.text().await
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+
+        if !status.is_success() {
+            return Err(Error::OAuth2RequestFailed {
+                status: status.as_u16(),
+                body,
+            });
+        }
+
+        let new_token_response: SalesforceTokenResponse = serde_json::from_str(&body)
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
 
         // Update token state with write lock
         let new_state = TokenState::new(new_token_response)?;
@@ -652,7 +669,7 @@ impl Client {
         let http_client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .map_err(|e| Error::TokenExchange(Box::new(e)))?;
+            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
 
         // Perform fresh OAuth2 authentication
         let token_response = match self.auth_flow {
@@ -889,7 +906,7 @@ impl Builder {
     pub fn build(self) -> Result<Client, Error> {
         Ok(Client {
             credentials_from: self.credentials_from.ok_or_else(|| {
-                Error::MissingRequiredAttribute("credentials or credentials_path".to_string())
+                Error::MissingRequiredAttribute { attribute: "credentials or credentials_path".to_string() }
             })?,
             auth_flow: self.auth_flow.unwrap_or_default(),
             token_state: None,
@@ -911,7 +928,7 @@ mod tests {
         let client = Builder::new().build();
         assert!(matches!(
             client,
-            Err(Error::MissingRequiredAttribute(attr)) if attr == "credentials or credentials_path"
+            Err(Error::MissingRequiredAttribute { attribute }) if attribute == "credentials or credentials_path"
         ));
     }
 
@@ -959,7 +976,8 @@ mod tests {
             .unwrap();
         let result = client.connect().await;
         let _ = fs::remove_file(path);
-        assert!(matches!(result, Err(Error::ParseUrl { .. })));
+        // Invalid URL (missing https://) results in network error wrapped in TokenExchange
+        assert!(matches!(result, Err(Error::TokenExchange { .. })));
     }
 
     #[tokio::test]
@@ -993,8 +1011,8 @@ mod tests {
             .unwrap();
         let result = client.connect().await;
         let _ = fs::remove_file(path);
-        // Should fail with TokenExchange error (invalid credentials)
-        assert!(matches!(result, Err(Error::TokenExchange(_))));
+        // Should fail with OAuth2RequestFailed (invalid credentials return HTTP error)
+        assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
     }
 
 
@@ -1010,8 +1028,8 @@ mod tests {
         };
         let client = Builder::new().credentials(creds).build().unwrap();
         let result = client.connect().await;
-        // Should fail with TokenExchange error (invalid credentials)
-        assert!(matches!(result, Err(Error::TokenExchange(_))));
+        // Should fail with OAuth2RequestFailed (invalid credentials return HTTP error)
+        assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
     }
 
     #[tokio::test]
@@ -1087,8 +1105,8 @@ mod tests {
             .build()
             .unwrap();
         let result = client.connect().await;
-        // Should fail with TokenExchange error (invalid credentials, but validation passed)
-        assert!(matches!(result, Err(Error::TokenExchange(_))));
+        // Should fail with OAuth2RequestFailed (invalid credentials return HTTP error, but validation passed)
+        assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
     }
 
 
@@ -1191,11 +1209,11 @@ mod tests {
             .build()
             .unwrap();
 
-        // Reconnect should fail with token exchange error since we have invalid credentials
+        // Reconnect should fail with OAuth2RequestFailed since we have invalid credentials
         let result = client.reconnect().await;
         assert!(matches!(
             result,
-            Err(Error::TokenExchange(_)) | Err(Error::ParseUrl { .. })
+            Err(Error::OAuth2RequestFailed { .. })
         ));
     }
 
