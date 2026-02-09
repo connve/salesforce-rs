@@ -1,6 +1,5 @@
 use salesforce_core::client::{self, AuthFlow, Credentials};
-use salesforce_core::pubsub::context::Context;
-use salesforce_pubsub_v1::eventbus;
+use salesforce_core::pubsub::{Client, FetchRequest, ReplayPreset, SchemaRequest, TopicRequest, ENDPOINT};
 use std::env;
 use std::path::PathBuf;
 use tokio_stream::StreamExt;
@@ -88,16 +87,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Note: reconnect() requires &mut self, so your client needs to be mutable.
 
     // Connect to Pub/Sub API
-    let channel = tonic::transport::Channel::from_static(eventbus::ENDPOINT)
+    let channel = tonic::transport::Channel::from_static(ENDPOINT)
         .connect()
         .await?;
 
-    let mut context = Context::new(channel, client)?;
+    let mut context = Client::new(channel, client)?;
 
-    info!("Pub/Sub context created");
+    info!("Pub/Sub client created");
 
     // Example: Get topic information
-    let topic_request = eventbus::v1::TopicRequest {
+    let topic_request = TopicRequest {
         topic_name: "/data/AccountChangeEvent".to_string(),
     };
 
@@ -116,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Example: Get schema information using schema_id from topic
-    let schema_request = eventbus::v1::SchemaRequest {
+    let schema_request = SchemaRequest {
         schema_id: schema_id.clone(),
     };
 
@@ -131,9 +130,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Example: Subscribe to events (infinite stream in background task)
-    let fetch_request = eventbus::v1::FetchRequest {
+    let fetch_request = FetchRequest {
         topic_name: "/data/AccountChangeEvent".to_string(),
-        replay_preset: eventbus::v1::ReplayPreset::Latest.into(),
+        replay_preset: ReplayPreset::Latest.into(),
         num_requested: 100,
         ..Default::default()
     };

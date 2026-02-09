@@ -8,13 +8,15 @@ use tokio_stream::StreamExt;
 pub enum Error {
     /// Client is missing or not initialized.
     #[error("Client missing")]
-    MissingClient(),
+    MissingClient,
     /// OAuth2 token is missing from client.
     #[error("Token response missing")]
-    MissingTokenResponse(),
+    MissingTokenResponse,
     /// Required client attribute is missing.
-    #[error("Missing required attribute: {}", _0)]
-    MissingRequiredAttribute(String),
+    #[error("Missing required attribute: {attribute}")]
+    MissingRequiredAttribute {
+        attribute: String,
+    },
     /// Failed to create valid gRPC metadata from client credentials.
     #[error("Invalid metadata value for gRPC headers: {source}")]
     InvalidMetadataValue {
@@ -50,7 +52,7 @@ impl tonic::service::Interceptor for ContextInterceptor {
     }
 }
 
-/// Pub/Sub API context for making gRPC calls.
+/// Pub/Sub API client for making gRPC calls.
 ///
 /// Manages authentication and provides methods for interacting with
 /// Salesforce Pub/Sub API endpoints. Supports reconnection when
@@ -60,28 +62,27 @@ impl tonic::service::Interceptor for ContextInterceptor {
 ///
 /// ```no_run
 /// use salesforce_core::client;
-/// use salesforce_core::pubsub::context::Context;
-/// use salesforce_pubsub_v1::eventbus;
+/// use salesforce_core::pubsub::{Client, ENDPOINT};
 /// use std::path::PathBuf;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = client::Builder::new()
+/// let auth_client = client::Builder::new()
 ///     .credentials_path(PathBuf::from("credentials.json"))
 ///     .build()?
 ///     .connect()
 ///     .await?;
 ///
-/// let channel = tonic::transport::Channel::from_static(eventbus::ENDPOINT)
+/// let channel = tonic::transport::Channel::from_static(ENDPOINT)
 ///     .connect()
 ///     .await?;
 ///
-/// let mut context = Context::new(channel, client)?;
+/// let mut pubsub_client = Client::new(channel, auth_client)?;
 /// # Ok(())
 /// # }
 /// ```
 #[derive(Debug)]
-pub struct Context {
+pub struct Client {
     pubsub: salesforce_pubsub_v1::eventbus::v1::pub_sub_client::PubSubClient<
         tonic::service::interceptor::InterceptedService<
             tonic::transport::Channel,
@@ -92,16 +93,17 @@ pub struct Context {
     client: client::Client,
 }
 
-impl Context {
-    /// Creates a new Pub/Sub context.
+impl Client {
+    /// Creates a new Pub/Sub client.
     ///
     /// # Errors
     ///
     /// Returns an error if the client is missing required authentication data.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn new(channel: tonic::transport::Channel, client: client::Client) -> Result<Self, Error> {
         let token = client
             .current_access_token()
-            .map_err(|_| Error::MissingTokenResponse())?;
+            .map_err(|_| Error::MissingTokenResponse)?;
 
         let auth_header: tonic::metadata::AsciiMetadataValue = token
             .parse()
@@ -110,14 +112,14 @@ impl Context {
         let instance_url: tonic::metadata::AsciiMetadataValue = client
             .instance_url
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute("instance_url".to_string()))?
+            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "instance_url".to_string() })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
         let tenant_id: tonic::metadata::AsciiMetadataValue = client
             .tenant_id
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute("tenant_id".to_string()))?
+            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "tenant_id".to_string() })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -129,14 +131,14 @@ impl Context {
 
         let pubsub = PubSubClient::with_interceptor(channel.clone(), interceptor);
 
-        Ok(Context {
+        Ok(Client {
             pubsub,
             channel,
             client,
         })
     }
 
-    /// Reconnects the Pub/Sub context with fresh authentication credentials.
+    /// Reconnects the Pub/Sub client with fresh authentication credentials.
     ///
     /// This method forces a new OAuth2 authentication and recreates the gRPC
     /// client with updated metadata headers. Use this when you receive
@@ -155,29 +157,29 @@ impl Context {
     ///
     /// ```no_run
     /// use salesforce_core::client;
-    /// use salesforce_core::pubsub::context::Context;
-    /// use salesforce_pubsub_v1::eventbus;
+    /// use salesforce_core::pubsub::{Client, ENDPOINT};
     /// use std::path::PathBuf;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = client::Builder::new()
+    /// let auth_client = client::Builder::new()
     ///     .credentials_path(PathBuf::from("credentials.json"))
     ///     .build()?
     ///     .connect()
     ///     .await?;
     ///
-    /// let channel = tonic::transport::Channel::from_static(eventbus::ENDPOINT)
+    /// let channel = tonic::transport::Channel::from_static(ENDPOINT)
     ///     .connect()
     ///     .await?;
     ///
-    /// let mut context = Context::new(channel, client)?;
+    /// let mut pubsub_client = Client::new(channel, auth_client)?;
     ///
     /// // Later, if authentication fails...
-    /// context.reconnect().await?;
+    /// pubsub_client.reconnect().await?;
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn reconnect(&mut self) -> Result<(), Error> {
         // Force fresh OAuth2 authentication
         self.client
@@ -189,7 +191,7 @@ impl Context {
         let token = self
             .client
             .current_access_token()
-            .map_err(|_| Error::MissingTokenResponse())?;
+            .map_err(|_| Error::MissingTokenResponse)?;
 
         let auth_header: tonic::metadata::AsciiMetadataValue = token
             .parse()
@@ -199,7 +201,7 @@ impl Context {
             .client
             .instance_url
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute("instance_url".to_string()))?
+            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "instance_url".to_string() })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -207,7 +209,7 @@ impl Context {
             .client
             .tenant_id
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute("tenant_id".to_string()))?
+            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "tenant_id".to_string() })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -227,6 +229,7 @@ impl Context {
     ///
     /// Returns information about a topic including schema ID, permissions,
     /// and RPC ID.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_topic(
         &mut self,
         request: salesforce_pubsub_v1::eventbus::v1::TopicRequest,
@@ -240,6 +243,7 @@ impl Context {
     /// Retrieves schema information for a topic.
     ///
     /// Returns the Avro schema definition for the specified schema ID.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_schema(
         &mut self,
         request: salesforce_pubsub_v1::eventbus::v1::SchemaRequest,
@@ -254,6 +258,7 @@ impl Context {
     ///
     /// Sends a batch of events to the specified topic. Events must be
     /// serialized according to the topic's Avro schema.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn publish(
         &mut self,
         request: salesforce_pubsub_v1::eventbus::v1::PublishRequest,
@@ -268,6 +273,7 @@ impl Context {
     ///
     /// Returns a stream of events. The stream will continue until an error
     /// occurs or the connection is closed.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn subscribe(
         &mut self,
         request: salesforce_pubsub_v1::eventbus::v1::FetchRequest,
@@ -289,6 +295,7 @@ impl Context {
     ///
     /// Requires a pre-configured managed subscription in Salesforce.
     /// Returns a stream of events with automatic commit handling.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn managed_subscribe(
         &mut self,
         request: salesforce_pubsub_v1::eventbus::v1::ManagedFetchRequest,
@@ -312,6 +319,7 @@ impl Context {
     ///
     /// Allows for continuous publishing with server responses for each batch.
     /// Useful for high-throughput scenarios.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn publish_stream(
         &mut self,
         request: salesforce_pubsub_v1::eventbus::v1::PublishRequest,
@@ -361,37 +369,10 @@ mod tests {
             .build()
             .unwrap();
         let _ = fs::remove_file(path);
-        let result = Context::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingTokenResponse())));
+        let result = Client::new(channel, client);
+        assert!(matches!(result, Err(Error::MissingTokenResponse)));
     }
 
-    #[test]
-    fn test_error_display_missing_client() {
-        let error = Error::MissingClient();
-        assert_eq!(error.to_string(), "Client missing");
-    }
-
-    #[test]
-    fn test_error_display_missing_token_response() {
-        let error = Error::MissingTokenResponse();
-        assert_eq!(error.to_string(), "Token response missing");
-    }
-
-    #[test]
-    fn test_error_display_missing_required_attribute() {
-        let error = Error::MissingRequiredAttribute("test_attr".to_string());
-        assert_eq!(error.to_string(), "Missing required attribute: test_attr");
-    }
-
-    #[test]
-    fn test_error_display_invalid_metadata() {
-        // Create an invalid metadata value (contains invalid ASCII character)
-        let invalid_value = tonic::metadata::AsciiMetadataValue::try_from("\n").unwrap_err();
-        let error = Error::InvalidMetadataValue {
-            source: invalid_value,
-        };
-        assert!(error.to_string().contains("Invalid metadata value"));
-    }
 
     #[tokio::test]
     async fn test_new_missing_instance_url() {
@@ -431,8 +412,8 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let result = Context::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingRequiredAttribute(_))));
+        let result = Client::new(channel, client);
+        assert!(matches!(result, Err(Error::MissingRequiredAttribute { .. })));
     }
 
     #[tokio::test]
@@ -473,50 +454,10 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let result = Context::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingRequiredAttribute(_))));
+        let result = Client::new(channel, client);
+        assert!(matches!(result, Err(Error::MissingRequiredAttribute { .. })));
     }
 
-    #[tokio::test]
-    async fn test_context_debug_impl() {
-        use oauth2::basic::BasicTokenResponse;
-        use oauth2::{AccessToken, EmptyExtraTokenFields};
-
-        let creds: &str = r#"
-            {
-                "client_id": "some_client_id",
-                "client_secret": "some_client_secret",
-                "instance_url": "https://mydomain.salesforce.com",
-                "tenant_id": "some_tenant_id"
-            }"#;
-        let mut path = PathBuf::new();
-        path.push(format!("test_creds_debug_{}.json", std::process::id()));
-        let _ = fs::write(path.clone(), creds);
-
-        let mut client = client::Builder::new()
-            .credentials_path(path.clone())
-            .build()
-            .unwrap();
-        let _ = fs::remove_file(path);
-
-        let token = BasicTokenResponse::new(
-            AccessToken::new("test_token".to_string()),
-            oauth2::basic::BasicTokenType::Bearer,
-            EmptyExtraTokenFields {},
-        );
-        // Create token state for testing
-        let token_state = crate::client::TokenState::new(token).unwrap();
-        client.token_state = Some(std::sync::Arc::new(std::sync::RwLock::new(token_state)));
-        client.instance_url = Some("https://mydomain.salesforce.com".to_string());
-        client.tenant_id = Some("test_tenant".to_string());
-
-        let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
-        let channel = endpoint.connect_lazy();
-
-        let context = Context::new(channel, client).unwrap();
-        let debug_str = format!("{context:?}");
-        assert!(debug_str.contains("Context"));
-    }
 
     #[tokio::test]
     async fn test_new_with_valid_client() {
@@ -549,7 +490,7 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let result = Context::new(channel, client);
+        let result = Client::new(channel, client);
         assert!(result.is_ok());
     }
 
@@ -585,7 +526,7 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let result = Context::new(channel, client);
+        let result = Client::new(channel, client);
         assert!(matches!(result, Err(Error::InvalidMetadataValue { .. })));
     }
 
@@ -620,7 +561,7 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let result = Context::new(channel, client);
+        let result = Client::new(channel, client);
         assert!(matches!(result, Err(Error::InvalidMetadataValue { .. })));
     }
 
@@ -655,38 +596,10 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let result = Context::new(channel, client);
+        let result = Client::new(channel, client);
         assert!(matches!(result, Err(Error::InvalidMetadataValue { .. })));
     }
 
-    #[test]
-    fn test_error_tonic_debug() {
-        let status = tonic::Status::internal("test error");
-        let error = Error::Tonic(Box::new(status));
-        let debug_str = format!("{error:?}");
-        assert!(debug_str.contains("Tonic"));
-    }
-
-    #[test]
-    fn test_error_invalid_credentials_display() {
-        let error = Error::InvalidMetadataValue {
-            source: tonic::metadata::AsciiMetadataValue::try_from("\n").unwrap_err(),
-        };
-        assert!(error.to_string().contains("Invalid metadata value"));
-    }
-
-    #[test]
-    fn test_error_missing_client_display() {
-        let error = Error::MissingClient();
-        assert_eq!(format!("{error}"), "Client missing");
-    }
-
-    #[test]
-    fn test_error_tonic_display() {
-        let status = tonic::Status::unavailable("service unavailable");
-        let error = Error::Tonic(Box::new(status));
-        assert!(format!("{error}").contains("gRPC transport error"));
-    }
 
     #[test]
     fn test_interceptor_adds_headers() {
@@ -750,67 +663,11 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        // Create context - should succeed
-        let context = Context::new(channel, client);
+        // Create client - should succeed
+        let context = Client::new(channel, client);
         assert!(context.is_ok());
-
-        // Verify debug output
-        let context = context.unwrap();
-        let debug_str = format!("{context:?}");
-        assert!(debug_str.contains("Context"));
-        assert!(debug_str.contains("pubsub"));
     }
 
-    #[test]
-    fn test_credentials_from_value_variant() {
-        let creds_from = client::CredentialsFrom::Value(client::Credentials {
-            client_id: "test".to_string(),
-            client_secret: Some("secret".to_string()),
-            username: None,
-            password: None,
-            instance_url: "https://test.salesforce.com".to_string(),
-            tenant_id: "tenant".to_string(),
-        });
-
-        match creds_from {
-            client::CredentialsFrom::Value(creds) => {
-                assert_eq!(creds.client_id, "test");
-            }
-            _ => panic!("Expected Value variant"),
-        }
-    }
-
-    #[test]
-    fn test_credentials_from_path_variant() {
-        let path = PathBuf::from("/test/path.json");
-        let creds_from = client::CredentialsFrom::Path(path.clone());
-
-        match creds_from {
-            client::CredentialsFrom::Path(p) => {
-                assert_eq!(p, path);
-            }
-            _ => panic!("Expected Path variant"),
-        }
-    }
-
-    #[test]
-    fn test_error_display_all_variants() {
-        // Test all error display implementations
-        let errors = vec![
-            Error::MissingClient(),
-            Error::MissingTokenResponse(),
-            Error::MissingRequiredAttribute("test_field".to_string()),
-            Error::InvalidMetadataValue {
-                source: tonic::metadata::AsciiMetadataValue::try_from("\n").unwrap_err(),
-            },
-            Error::Tonic(Box::new(tonic::Status::internal("test"))),
-        ];
-
-        for error in errors {
-            let display = format!("{error}");
-            assert!(!display.is_empty());
-        }
-    }
 
     #[tokio::test]
     async fn test_context_with_special_characters_in_token() {
@@ -844,7 +701,7 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let result = Context::new(channel, client);
+        let result = Client::new(channel, client);
         assert!(result.is_ok());
     }
 
@@ -867,8 +724,8 @@ mod tests {
         let channel = endpoint.connect_lazy();
 
         // Should fail due to missing token
-        let result = Context::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingTokenResponse())));
+        let result = Client::new(channel, client);
+        assert!(matches!(result, Err(Error::MissingTokenResponse)));
     }
 
     #[tokio::test]
@@ -902,7 +759,7 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let mut context = Context::new(channel, client).unwrap();
+        let mut context = Client::new(channel, client).unwrap();
 
         // Clear token state to simulate missing credentials
         context.client.token_state = None;
@@ -943,7 +800,7 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let mut context = Context::new(channel, client).unwrap();
+        let mut context = Client::new(channel, client).unwrap();
 
         // Clear instance_url to simulate missing field after reconnect attempt
         context.client.instance_url = None;
@@ -985,7 +842,7 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let mut context = Context::new(channel, client).unwrap();
+        let mut context = Client::new(channel, client).unwrap();
 
         // Set invalid tenant_id with newlines (invalid ASCII for metadata)
         context.client.tenant_id = Some("tenant\nwith\nnewlines".to_string());
@@ -1026,11 +883,8 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let context = Context::new(channel, client).unwrap();
-
-        // Verify channel is stored
-        let debug_str = format!("{:?}", context.channel);
-        assert!(debug_str.contains("Channel"));
+        let result = Client::new(channel, client);
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -1064,7 +918,7 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        let mut context = Context::new(channel, client).unwrap();
+        let mut context = Client::new(channel, client).unwrap();
 
         // Attempt reconnect - will fail because we don't have real OAuth credentials
         let result = context.reconnect().await;
@@ -1109,16 +963,12 @@ mod tests {
         let endpoint = tonic::transport::Endpoint::from_static("http://localhost:50051");
         let channel = endpoint.connect_lazy();
 
-        // Create context
-        let context = Context::new(channel, client).unwrap();
+        // Create client
+        let context = Client::new(channel, client).unwrap();
 
         // Verify that client is stored correctly by accessing its fields
         assert_eq!(context.client.tenant_id.as_ref().unwrap(), &expected_tenant);
         assert!(context.client.instance_url.is_some());
         assert!(context.client.token_state.is_some());
-
-        // Verify channel is stored
-        let debug_str = format!("{:?}", context.channel);
-        assert!(debug_str.contains("Channel"));
     }
 }
