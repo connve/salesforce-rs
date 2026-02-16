@@ -36,6 +36,12 @@ pub const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 30;
 /// This longer timeout is appropriate for bulk operations which may take longer to process.
 pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 120;
 
+/// Default connection timeout for OAuth2 authentication requests (15 seconds).
+pub const DEFAULT_AUTH_CONNECT_TIMEOUT_SECS: u64 = 15;
+
+/// Default request timeout for OAuth2 authentication requests (30 seconds).
+pub const DEFAULT_AUTH_REQUEST_TIMEOUT_SECS: u64 = 30;
+
 /// OAuth2 client authentication and connection management.
 pub mod client;
 

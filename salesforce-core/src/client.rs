@@ -417,6 +417,12 @@ impl Client {
         // Create HTTP client for async requests
         let http_client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_AUTH_CONNECT_TIMEOUT_SECS,
+            ))
+            .timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
+            ))
             .build()
             .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
 
@@ -556,6 +562,12 @@ impl Client {
         // Create HTTP client
         let http_client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_AUTH_CONNECT_TIMEOUT_SECS,
+            ))
+            .timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
+            ))
             .build()
             .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
 
@@ -674,6 +686,12 @@ impl Client {
         // Create HTTP client
         let http_client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_AUTH_CONNECT_TIMEOUT_SECS,
+            ))
+            .timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
+            ))
             .build()
             .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
 
