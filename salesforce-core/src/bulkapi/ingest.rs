@@ -32,10 +32,11 @@ impl IngestClient {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             reqwest::header::AUTHORIZATION,
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-                .map_err(|_| Error::Auth {
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| {
+                Error::Auth {
                     source: client::Error::LockError,
-                })?,
+                }
+            })?,
         );
 
         reqwest::ClientBuilder::new()
@@ -114,7 +115,10 @@ impl IngestClient {
         request: &CreateIngestJobRequest,
     ) -> Result<IngestJobInfo, Error> {
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -167,7 +171,10 @@ impl IngestClient {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_job(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -217,7 +224,10 @@ impl IngestClient {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn upload_data(&self, job_id: &str, csv_data: &[u8]) -> Result<(), Error> {
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         client
@@ -271,7 +281,10 @@ impl IngestClient {
         use salesforce_core_v1::types::{JobState, UpdateIngestJobStateBody};
 
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -331,7 +344,10 @@ impl IngestClient {
         use salesforce_core_v1::types::{JobState, UpdateIngestJobStateBody};
 
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -384,7 +400,10 @@ impl IngestClient {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn delete_job(&self, job_id: &str) -> Result<(), Error> {
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         client
@@ -443,7 +462,10 @@ impl IngestClient {
         job_id: &str,
     ) -> Result<salesforce_core_v1::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -502,7 +524,10 @@ impl IngestClient {
         job_id: &str,
     ) -> Result<salesforce_core_v1::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -561,7 +586,10 @@ impl IngestClient {
         job_id: &str,
     ) -> Result<salesforce_core_v1::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -623,7 +651,10 @@ impl IngestClient {
         query_locator: Option<&str>,
     ) -> Result<salesforce_core_v1::types::GetAllIngestJobsResponse, Error> {
         let http_client = self.build_http_client().await?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -654,5 +685,4 @@ pub enum Error {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}

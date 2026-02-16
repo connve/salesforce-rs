@@ -45,15 +45,10 @@ pub enum Error {
     },
     /// HTTP request failed during OAuth2 token exchange.
     #[error("OAuth2 request failed with status {status}: {body}")]
-    OAuth2RequestFailed {
-        status: u16,
-        body: String,
-    },
+    OAuth2RequestFailed { status: u16, body: String },
     /// Required builder parameter was not provided.
     #[error("Missing required attribute: {attribute}")]
-    MissingRequiredAttribute {
-        attribute: String,
-    },
+    MissingRequiredAttribute { attribute: String },
     /// Client secret is required for this authentication flow.
     #[error("Client secret is required for authentication")]
     MissingClientSecret,
@@ -82,7 +77,9 @@ pub enum Error {
     #[error("Failed to acquire lock on token state")]
     LockError,
     /// Client is not connected - call connect() before using.
-    #[error("Client is not connected. Call connect() first to authenticate and retrieve instance URL.")]
+    #[error(
+        "Client is not connected. Call connect() first to authenticate and retrieve instance URL."
+    )]
     NotConnected,
     /// Failed to build HTTP client.
     #[error("Failed to build HTTP client: {source}")]
@@ -372,12 +369,24 @@ impl Client {
     fn validate_credentials(&self, credentials: &Credentials) -> Result<(), Error> {
         match self.auth_flow {
             AuthFlow::ClientCredentials => {
-                credentials.client_secret.as_ref().ok_or(Error::MissingClientSecret)?;
+                credentials
+                    .client_secret
+                    .as_ref()
+                    .ok_or(Error::MissingClientSecret)?;
             }
             AuthFlow::UsernamePassword => {
-                credentials.client_secret.as_ref().ok_or(Error::MissingClientSecret)?;
-                credentials.username.as_ref().ok_or(Error::MissingUsername)?;
-                credentials.password.as_ref().ok_or(Error::MissingPassword)?;
+                credentials
+                    .client_secret
+                    .as_ref()
+                    .ok_or(Error::MissingClientSecret)?;
+                credentials
+                    .username
+                    .as_ref()
+                    .ok_or(Error::MissingUsername)?;
+                credentials
+                    .password
+                    .as_ref()
+                    .ok_or(Error::MissingPassword)?;
             }
         }
 
@@ -424,7 +433,9 @@ impl Client {
                 crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
             ))
             .build()
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+            .map_err(|e| Error::TokenExchange {
+                source: Box::new(e),
+            })?;
 
         let token_response = match self.auth_flow {
             AuthFlow::ClientCredentials => {
@@ -450,7 +461,10 @@ impl Client {
         credentials: &Credentials,
         http_client: &reqwest::Client,
     ) -> Result<SalesforceTokenResponse, Error> {
-        let client_secret = credentials.client_secret.as_ref().ok_or(Error::MissingClientSecret)?;
+        let client_secret = credentials
+            .client_secret
+            .as_ref()
+            .ok_or(Error::MissingClientSecret)?;
 
         let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
@@ -463,11 +477,14 @@ impl Client {
             ])
             .send()
             .await
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+            .map_err(|e| Error::TokenExchange {
+                source: Box::new(e),
+            })?;
 
         let status = response.status();
-        let body = response.text().await
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+        let body = response.text().await.map_err(|e| Error::TokenExchange {
+            source: Box::new(e),
+        })?;
 
         if !status.is_success() {
             return Err(Error::OAuth2RequestFailed {
@@ -476,8 +493,9 @@ impl Client {
             });
         }
 
-        serde_json::from_str(&body)
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })
+        serde_json::from_str(&body).map_err(|e| Error::TokenExchange {
+            source: Box::new(e),
+        })
     }
 
     /// Performs OAuth2 Resource Owner Password Credentials flow.
@@ -486,9 +504,18 @@ impl Client {
         credentials: &Credentials,
         http_client: &reqwest::Client,
     ) -> Result<SalesforceTokenResponse, Error> {
-        let client_secret = credentials.client_secret.as_ref().ok_or(Error::MissingClientSecret)?;
-        let username = credentials.username.as_ref().ok_or(Error::MissingUsername)?;
-        let password = credentials.password.as_ref().ok_or(Error::MissingPassword)?;
+        let client_secret = credentials
+            .client_secret
+            .as_ref()
+            .ok_or(Error::MissingClientSecret)?;
+        let username = credentials
+            .username
+            .as_ref()
+            .ok_or(Error::MissingUsername)?;
+        let password = credentials
+            .password
+            .as_ref()
+            .ok_or(Error::MissingPassword)?;
 
         let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
@@ -503,11 +530,14 @@ impl Client {
             ])
             .send()
             .await
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+            .map_err(|e| Error::TokenExchange {
+                source: Box::new(e),
+            })?;
 
         let status = response.status();
-        let body = response.text().await
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+        let body = response.text().await.map_err(|e| Error::TokenExchange {
+            source: Box::new(e),
+        })?;
 
         if !status.is_success() {
             return Err(Error::OAuth2RequestFailed {
@@ -516,8 +546,9 @@ impl Client {
             });
         }
 
-        serde_json::from_str(&body)
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })
+        serde_json::from_str(&body).map_err(|e| Error::TokenExchange {
+            source: Box::new(e),
+        })
     }
 
     /// Refreshes the access token using the refresh token.
@@ -555,7 +586,10 @@ impl Client {
             }
         };
 
-        let client_secret = credentials.client_secret.as_ref().ok_or(Error::MissingClientSecret)?;
+        let client_secret = credentials
+            .client_secret
+            .as_ref()
+            .ok_or(Error::MissingClientSecret)?;
 
         let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
@@ -569,7 +603,9 @@ impl Client {
                 crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
             ))
             .build()
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+            .map_err(|e| Error::TokenExchange {
+                source: Box::new(e),
+            })?;
 
         // Exchange refresh token for new access token
         let response = http_client
@@ -582,11 +618,14 @@ impl Client {
             ])
             .send()
             .await
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+            .map_err(|e| Error::TokenExchange {
+                source: Box::new(e),
+            })?;
 
         let status = response.status();
-        let body = response.text().await
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+        let body = response.text().await.map_err(|e| Error::TokenExchange {
+            source: Box::new(e),
+        })?;
 
         if !status.is_success() {
             return Err(Error::OAuth2RequestFailed {
@@ -595,8 +634,10 @@ impl Client {
             });
         }
 
-        let new_token_response: SalesforceTokenResponse = serde_json::from_str(&body)
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+        let new_token_response: SalesforceTokenResponse =
+            serde_json::from_str(&body).map_err(|e| Error::TokenExchange {
+                source: Box::new(e),
+            })?;
 
         // Update token state with write lock
         let new_state = TokenState::new(new_token_response)?;
@@ -693,7 +734,9 @@ impl Client {
                 crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
             ))
             .build()
-            .map_err(|e| Error::TokenExchange { source: Box::new(e) })?;
+            .map_err(|e| Error::TokenExchange {
+                source: Box::new(e),
+            })?;
 
         // Perform fresh OAuth2 authentication
         let token_response = match self.auth_flow {
@@ -930,7 +973,9 @@ impl Builder {
     pub fn build(self) -> Result<Client, Error> {
         Ok(Client {
             credentials_from: self.credentials_from.ok_or_else(|| {
-                Error::MissingRequiredAttribute { attribute: "credentials or credentials_path".to_string() }
+                Error::MissingRequiredAttribute {
+                    attribute: "credentials or credentials_path".to_string(),
+                }
             })?,
             auth_flow: self.auth_flow.unwrap_or_default(),
             token_state: None,
@@ -1013,7 +1058,6 @@ mod tests {
         assert!(matches!(result, Err(Error::ReadCredentials { .. })));
     }
 
-
     #[tokio::test]
     async fn test_connect_with_valid_json_but_invalid_credentials() {
         let creds: &str = r#"
@@ -1038,7 +1082,6 @@ mod tests {
         // Should fail with OAuth2RequestFailed (invalid credentials return HTTP error)
         assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
     }
-
 
     #[tokio::test]
     async fn test_connect_with_direct_credentials() {
@@ -1133,7 +1176,6 @@ mod tests {
         assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
     }
 
-
     #[tokio::test]
     async fn test_username_password_flow_missing_client_secret() {
         let creds = Credentials {
@@ -1152,8 +1194,6 @@ mod tests {
         let result = client.connect().await;
         assert!(matches!(result, Err(Error::MissingClientSecret)));
     }
-
-
 
     #[test]
     fn test_token_state_expiry_check_with_buffer() {
@@ -1181,7 +1221,6 @@ mod tests {
         assert!(is_expired.is_ok());
         assert!(!is_expired.unwrap());
     }
-
 
     #[test]
     fn test_current_access_token_without_connection() {
@@ -1235,10 +1274,6 @@ mod tests {
 
         // Reconnect should fail with OAuth2RequestFailed since we have invalid credentials
         let result = client.reconnect().await;
-        assert!(matches!(
-            result,
-            Err(Error::OAuth2RequestFailed { .. })
-        ));
+        assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
     }
-
 }

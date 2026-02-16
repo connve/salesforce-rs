@@ -42,8 +42,8 @@
 //! ```
 
 mod client;
-pub mod query;
 pub mod ingest;
+pub mod query;
 
 pub use client::{Client, ClientBuilder};
 
@@ -57,20 +57,20 @@ pub use salesforce_core_v1::types::{
     ColumnDelimiter,
     ConcurrencyMode,
     ContentType,
+    // Ingest types
+    CreateIngestJobRequest,
+    // Query types
+    CreateQueryJobRequest,
+    GetAllIngestJobsResponse,
+    IngestJobInfo,
     IngestOperation,
     JobState,
     JobType,
     LineEnding,
-    QueryOperation,
-    // Query types
-    CreateQueryJobRequest,
     QueryJobInfo,
     QueryJobList,
+    QueryOperation,
     QueryResultPages,
-    // Ingest types
-    CreateIngestJobRequest,
-    GetAllIngestJobsResponse,
-    IngestJobInfo,
 };
 
 /// Re-export ByteStream for handling streaming results.

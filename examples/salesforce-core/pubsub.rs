@@ -1,5 +1,7 @@
 use salesforce_core::client::{self, AuthFlow, Credentials};
-use salesforce_core::pubsub::{Client, FetchRequest, ReplayPreset, SchemaRequest, TopicRequest, ENDPOINT};
+use salesforce_core::pubsub::{
+    Client, FetchRequest, ReplayPreset, SchemaRequest, TopicRequest, ENDPOINT,
+};
 use std::env;
 use std::path::PathBuf;
 use tokio_stream::StreamExt;

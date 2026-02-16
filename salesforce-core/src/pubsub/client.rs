@@ -14,9 +14,7 @@ pub enum Error {
     MissingTokenResponse,
     /// Required client attribute is missing.
     #[error("Missing required attribute: {attribute}")]
-    MissingRequiredAttribute {
-        attribute: String,
-    },
+    MissingRequiredAttribute { attribute: String },
     /// Failed to create valid gRPC metadata from client credentials.
     #[error("Invalid metadata value for gRPC headers: {source}")]
     InvalidMetadataValue {
@@ -112,14 +110,18 @@ impl Client {
         let instance_url: tonic::metadata::AsciiMetadataValue = client
             .instance_url
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "instance_url".to_string() })?
+            .ok_or_else(|| Error::MissingRequiredAttribute {
+                attribute: "instance_url".to_string(),
+            })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
         let tenant_id: tonic::metadata::AsciiMetadataValue = client
             .tenant_id
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "tenant_id".to_string() })?
+            .ok_or_else(|| Error::MissingRequiredAttribute {
+                attribute: "tenant_id".to_string(),
+            })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -201,7 +203,9 @@ impl Client {
             .client
             .instance_url
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "instance_url".to_string() })?
+            .ok_or_else(|| Error::MissingRequiredAttribute {
+                attribute: "instance_url".to_string(),
+            })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -209,7 +213,9 @@ impl Client {
             .client
             .tenant_id
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute { attribute: "tenant_id".to_string() })?
+            .ok_or_else(|| Error::MissingRequiredAttribute {
+                attribute: "tenant_id".to_string(),
+            })?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -373,7 +379,6 @@ mod tests {
         assert!(matches!(result, Err(Error::MissingTokenResponse)));
     }
 
-
     #[tokio::test]
     async fn test_new_missing_instance_url() {
         use oauth2::basic::BasicTokenResponse;
@@ -413,7 +418,10 @@ mod tests {
         let channel = endpoint.connect_lazy();
 
         let result = Client::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingRequiredAttribute { .. })));
+        assert!(matches!(
+            result,
+            Err(Error::MissingRequiredAttribute { .. })
+        ));
     }
 
     #[tokio::test]
@@ -455,9 +463,11 @@ mod tests {
         let channel = endpoint.connect_lazy();
 
         let result = Client::new(channel, client);
-        assert!(matches!(result, Err(Error::MissingRequiredAttribute { .. })));
+        assert!(matches!(
+            result,
+            Err(Error::MissingRequiredAttribute { .. })
+        ));
     }
-
 
     #[tokio::test]
     async fn test_new_with_valid_client() {
@@ -600,7 +610,6 @@ mod tests {
         assert!(matches!(result, Err(Error::InvalidMetadataValue { .. })));
     }
 
-
     #[test]
     fn test_interceptor_adds_headers() {
         let auth_header = tonic::metadata::AsciiMetadataValue::try_from("test_token").unwrap();
@@ -667,7 +676,6 @@ mod tests {
         let context = Client::new(channel, client);
         assert!(context.is_ok());
     }
-
 
     #[tokio::test]
     async fn test_context_with_special_characters_in_token() {
