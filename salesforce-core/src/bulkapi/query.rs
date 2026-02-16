@@ -20,6 +20,34 @@ impl QueryClient {
         Self { bulk_client }
     }
 
+    /// Helper to build an HTTP client with authentication headers and connection pooling.
+    async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
+        let token = self
+            .bulk_client
+            .auth_client()
+            .access_token()
+            .await
+            .map_err(|source| Error::Auth { source })?;
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+                .map_err(|_| Error::Auth {
+                    source: client::Error::LockError,
+                })?,
+        );
+
+        reqwest::ClientBuilder::new()
+            .default_headers(headers)
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(std::time::Duration::from_secs(90))
+            .build()
+            .map_err(|source| Error::Auth {
+                source: client::Error::HttpClientBuild { source },
+            })
+    }
+
     /// Creates a new bulk query job.
     ///
     /// # Arguments
@@ -69,11 +97,7 @@ impl QueryClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn create_job(&self, request: &CreateQueryJobRequest) -> Result<QueryJobInfo, Error> {
-        let http_client = self
-            .bulk_client
-            .build_http_client()
-            .await
-            .map_err(|source| Error::Auth { source })?;
+        let http_client = self.build_http_client().await?;
         let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -123,11 +147,7 @@ impl QueryClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_job(&self, job_id: &str) -> Result<QueryJobInfo, Error> {
-        let http_client = self
-            .bulk_client
-            .build_http_client()
-            .await
-            .map_err(|source| Error::Auth { source })?;
+        let http_client = self.build_http_client().await?;
         let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -195,11 +215,7 @@ impl QueryClient {
         max_records: Option<i64>,
         locator: Option<&str>,
     ) -> Result<ByteStream, Error> {
-        let http_client = self
-            .bulk_client
-            .build_http_client()
-            .await
-            .map_err(|source| Error::Auth { source })?;
+        let http_client = self.build_http_client().await?;
         let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -246,11 +262,7 @@ impl QueryClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn delete_job(&self, job_id: &str) -> Result<(), Error> {
-        let http_client = self
-            .bulk_client
-            .build_http_client()
-            .await
-            .map_err(|source| Error::Auth { source })?;
+        let http_client = self.build_http_client().await?;
         let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -305,11 +317,7 @@ impl QueryClient {
     pub async fn abort_job(&self, job_id: &str) -> Result<QueryJobInfo, Error> {
         use salesforce_core_v1::types::{AbortQueryJobBody, AbortQueryJobBodyState};
 
-        let http_client = self
-            .bulk_client
-            .build_http_client()
-            .await
-            .map_err(|source| Error::Auth { source })?;
+        let http_client = self.build_http_client().await?;
         let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -378,11 +386,7 @@ impl QueryClient {
         concurrency_mode: Option<salesforce_core_v1::types::ConcurrencyMode>,
         query_locator: Option<&str>,
     ) -> Result<salesforce_core_v1::types::QueryJobList, Error> {
-        let http_client = self
-            .bulk_client
-            .build_http_client()
-            .await
-            .map_err(|source| Error::Auth { source })?;
+        let http_client = self.build_http_client().await?;
         let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -446,11 +450,7 @@ impl QueryClient {
         job_id: &str,
         locator: Option<&str>,
     ) -> Result<salesforce_core_v1::types::QueryResultPages, Error> {
-        let http_client = self
-            .bulk_client
-            .build_http_client()
-            .await
-            .map_err(|source| Error::Auth { source })?;
+        let http_client = self.build_http_client().await?;
         let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 

@@ -268,24 +268,6 @@ impl Client {
         super::ingest::IngestClient::new(self.clone())
     }
 
-    /// Internal helper to create a configured HTTP client with authentication.
-    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
-    pub(crate) async fn build_http_client(&self) -> Result<reqwest::Client, client::Error> {
-        let token = self.auth_client.access_token().await?;
-
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            reqwest::header::AUTHORIZATION,
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-                .map_err(|_| client::Error::LockError)?,
-        );
-
-        reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .map_err(|e| client::Error::TokenExchange { source: Box::new(e) })
-    }
-
     /// Internal helper to get the base URL for Bulk API.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub(crate) fn base_url(&self) -> Result<String, client::Error> {
@@ -368,35 +350,6 @@ mod tests {
             bulk_client_59.base_url().unwrap(),
             "https://test.salesforce.com/services/data/v59.0"
         );
-    }
-
-    #[tokio::test]
-    async fn test_build_http_client_with_valid_token() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = ClientBuilder::new(auth_client).build();
-
-        let result = bulk_client.build_http_client().await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_build_http_client_without_token() {
-        let client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_client_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
-            .build()
-            .unwrap();
-
-        let bulk_client = ClientBuilder::new(client).api_version("58.0").build();
-        let result = bulk_client.build_http_client().await;
-
-        assert!(result.is_err());
     }
 
     #[test]

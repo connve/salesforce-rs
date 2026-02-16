@@ -84,6 +84,12 @@ pub enum Error {
     /// Client is not connected - call connect() before using.
     #[error("Client is not connected. Call connect() first to authenticate and retrieve instance URL.")]
     NotConnected,
+    /// Failed to build HTTP client.
+    #[error("Failed to build HTTP client: {source}")]
+    HttpClientBuild {
+        #[source]
+        source: reqwest::Error,
+    },
 }
 
 /// Type alias for Salesforce OAuth2 token response using standard fields.
