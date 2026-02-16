@@ -40,6 +40,8 @@ impl IngestClient {
 
         reqwest::ClientBuilder::new()
             .default_headers(headers)
+            .connect_timeout(self.bulk_client.connect_timeout())
+            .timeout(self.bulk_client.request_timeout())
             .pool_max_idle_per_host(10)
             .pool_idle_timeout(std::time::Duration::from_secs(90))
             .build()
