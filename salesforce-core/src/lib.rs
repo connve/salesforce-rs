@@ -42,6 +42,15 @@ pub const DEFAULT_AUTH_CONNECT_TIMEOUT_SECS: u64 = 15;
 /// Default request timeout for OAuth2 authentication requests (30 seconds).
 pub const DEFAULT_AUTH_REQUEST_TIMEOUT_SECS: u64 = 30;
 
+/// Default TCP keepalive interval (60 seconds).
+pub const DEFAULT_TCP_KEEPALIVE_SECS: u64 = 60;
+
+/// Default connection pool idle timeout (90 seconds).
+pub const DEFAULT_POOL_IDLE_TIMEOUT_SECS: u64 = 90;
+
+/// Default maximum idle connections per host (10).
+pub const DEFAULT_POOL_MAX_IDLE_PER_HOST: usize = 10;
+
 /// OAuth2 client authentication and connection management.
 pub mod client;
 

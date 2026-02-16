@@ -42,8 +42,13 @@ impl QueryClient {
             .default_headers(headers)
             .connect_timeout(self.bulk_client.connect_timeout())
             .timeout(self.bulk_client.request_timeout())
-            .pool_max_idle_per_host(10)
-            .pool_idle_timeout(std::time::Duration::from_secs(90))
+            .tcp_keepalive(std::time::Duration::from_secs(
+                crate::DEFAULT_TCP_KEEPALIVE_SECS,
+            ))
+            .pool_max_idle_per_host(crate::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+            .pool_idle_timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
             .build()
             .map_err(|source| Error::Auth {
                 source: client::Error::HttpClientBuild { source },
