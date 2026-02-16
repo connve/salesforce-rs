@@ -51,6 +51,8 @@ use std::sync::Arc;
 pub struct Client {
     auth_client: Arc<client::Client>,
     api_version: String,
+    connect_timeout: std::time::Duration,
+    request_timeout: std::time::Duration,
 }
 
 /// Builder for creating a Bulk API client.
@@ -58,6 +60,8 @@ pub struct Client {
 pub struct ClientBuilder {
     auth_client: client::Client,
     api_version: Option<String>,
+    connect_timeout: Option<std::time::Duration>,
+    request_timeout: Option<std::time::Duration>,
 }
 
 impl ClientBuilder {
@@ -107,6 +111,8 @@ impl ClientBuilder {
         Self {
             auth_client,
             api_version: None,
+            connect_timeout: None,
+            request_timeout: None,
         }
     }
 
@@ -150,6 +156,94 @@ impl ClientBuilder {
         self
     }
 
+    /// Sets the connection timeout for HTTP requests.
+    ///
+    /// This controls how long to wait when establishing a connection to Salesforce.
+    /// If not specified, defaults to [`crate::DEFAULT_CONNECT_TIMEOUT_SECS`] seconds.
+    ///
+    /// # Arguments
+    ///
+    /// * `timeout` - Duration to wait for connection establishment
+    ///
+    /// # Returns
+    ///
+    /// The builder for method chaining.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::bulkapi::ClientBuilder;
+    /// # use std::time::Duration;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let auth_client = client::Builder::new()
+    /// #     .credentials(Credentials {
+    /// #         client_id: "...".to_string(),
+    /// #         client_secret: Some("...".to_string()),
+    /// #         username: None,
+    /// #         password: None,
+    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
+    /// #         tenant_id: "...".to_string(),
+    /// #     })
+    /// #     .build()?
+    /// #     .connect()
+    /// #     .await?;
+    /// let bulk_client = ClientBuilder::new(auth_client)
+    ///     .connect_timeout(Duration::from_secs(60))
+    ///     .build();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn connect_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self
+    }
+
+    /// Sets the request timeout for HTTP requests.
+    ///
+    /// This controls how long to wait for a complete request/response cycle.
+    /// If not specified, defaults to [`crate::DEFAULT_REQUEST_TIMEOUT_SECS`] seconds for bulk operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `timeout` - Duration to wait for request completion
+    ///
+    /// # Returns
+    ///
+    /// The builder for method chaining.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::bulkapi::ClientBuilder;
+    /// # use std::time::Duration;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let auth_client = client::Builder::new()
+    /// #     .credentials(Credentials {
+    /// #         client_id: "...".to_string(),
+    /// #         client_secret: Some("...".to_string()),
+    /// #         username: None,
+    /// #         password: None,
+    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
+    /// #         tenant_id: "...".to_string(),
+    /// #     })
+    /// #     .build()?
+    /// #     .connect()
+    /// #     .await?;
+    /// let bulk_client = ClientBuilder::new(auth_client)
+    ///     .request_timeout(Duration::from_secs(300))
+    ///     .build();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn request_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.request_timeout = Some(timeout);
+        self
+    }
+
     /// Builds the Bulk API client.
     ///
     /// If no API version was specified, uses the default version from `crate::DEFAULT_API_VERSION`.
@@ -187,6 +281,16 @@ impl ClientBuilder {
             api_version: self
                 .api_version
                 .unwrap_or_else(|| crate::DEFAULT_API_VERSION.to_string()),
+            connect_timeout: self
+                .connect_timeout
+                .unwrap_or(std::time::Duration::from_secs(
+                    crate::DEFAULT_CONNECT_TIMEOUT_SECS,
+                )),
+            request_timeout: self
+                .request_timeout
+                .unwrap_or(std::time::Duration::from_secs(
+                    crate::DEFAULT_REQUEST_TIMEOUT_SECS,
+                )),
         }
     }
 }
@@ -202,6 +306,18 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn api_version(&self) -> &str {
         &self.api_version
+    }
+
+    /// Returns the configured connection timeout.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub(crate) fn connect_timeout(&self) -> std::time::Duration {
+        self.connect_timeout
+    }
+
+    /// Returns the configured request timeout.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub(crate) fn request_timeout(&self) -> std::time::Duration {
+        self.request_timeout
     }
 
     /// Creates a query client for bulk query operations.
@@ -266,24 +382,6 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn ingest(&self) -> super::ingest::IngestClient {
         super::ingest::IngestClient::new(self.clone())
-    }
-
-    /// Internal helper to create a configured HTTP client with authentication.
-    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
-    pub(crate) async fn build_http_client(&self) -> Result<reqwest::Client, client::Error> {
-        let token = self.auth_client.access_token().await?;
-
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            reqwest::header::AUTHORIZATION,
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-                .map_err(|_| client::Error::LockError)?,
-        );
-
-        reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .map_err(|e| client::Error::TokenExchange { source: Box::new(e) })
     }
 
     /// Internal helper to get the base URL for Bulk API.
@@ -368,35 +466,6 @@ mod tests {
             bulk_client_59.base_url().unwrap(),
             "https://test.salesforce.com/services/data/v59.0"
         );
-    }
-
-    #[tokio::test]
-    async fn test_build_http_client_with_valid_token() {
-        let auth_client = create_mock_auth_client();
-        let bulk_client = ClientBuilder::new(auth_client).build();
-
-        let result = bulk_client.build_http_client().await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_build_http_client_without_token() {
-        let client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_client_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
-            .build()
-            .unwrap();
-
-        let bulk_client = ClientBuilder::new(client).api_version("58.0").build();
-        let result = bulk_client.build_http_client().await;
-
-        assert!(result.is_err());
     }
 
     #[test]

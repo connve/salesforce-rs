@@ -20,6 +20,42 @@ impl IngestClient {
         Self { bulk_client }
     }
 
+    /// Helper to build an HTTP client with authentication headers and connection pooling.
+    async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
+        let token = self
+            .bulk_client
+            .auth_client()
+            .access_token()
+            .await
+            .map_err(|source| Error::Auth { source })?;
+
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| {
+                Error::Auth {
+                    source: client::Error::LockError,
+                }
+            })?,
+        );
+
+        reqwest::ClientBuilder::new()
+            .default_headers(headers)
+            .connect_timeout(self.bulk_client.connect_timeout())
+            .timeout(self.bulk_client.request_timeout())
+            .tcp_keepalive(std::time::Duration::from_secs(
+                crate::DEFAULT_TCP_KEEPALIVE_SECS,
+            ))
+            .pool_max_idle_per_host(crate::DEFAULT_POOL_MAX_IDLE_PER_HOST)
+            .pool_idle_timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+            ))
+            .build()
+            .map_err(|source| Error::Auth {
+                source: client::Error::HttpClientBuild { source },
+            })
+    }
+
     /// Creates a new bulk ingest job.
     ///
     /// After creating the job, you'll need to upload data to it and then close
@@ -78,12 +114,11 @@ impl IngestClient {
         &self,
         request: &CreateIngestJobRequest,
     ) -> Result<IngestJobInfo, Error> {
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -135,12 +170,11 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_job(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -189,12 +223,11 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn upload_data(&self, job_id: &str, csv_data: &[u8]) -> Result<(), Error> {
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         client
@@ -247,12 +280,11 @@ impl IngestClient {
     pub async fn mark_upload_complete(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
         use salesforce_core_v1::types::{JobState, UpdateIngestJobStateBody};
 
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -311,12 +343,11 @@ impl IngestClient {
     pub async fn abort_job(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
         use salesforce_core_v1::types::{JobState, UpdateIngestJobStateBody};
 
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -368,12 +399,11 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn delete_job(&self, job_id: &str) -> Result<(), Error> {
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         client
@@ -431,12 +461,11 @@ impl IngestClient {
         &self,
         job_id: &str,
     ) -> Result<salesforce_core_v1::ByteStream, Error> {
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -494,12 +523,11 @@ impl IngestClient {
         &self,
         job_id: &str,
     ) -> Result<salesforce_core_v1::ByteStream, Error> {
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -557,12 +585,11 @@ impl IngestClient {
         &self,
         job_id: &str,
     ) -> Result<salesforce_core_v1::ByteStream, Error> {
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -623,12 +650,11 @@ impl IngestClient {
         job_type: Option<salesforce_core_v1::types::JobType>,
         query_locator: Option<&str>,
     ) -> Result<salesforce_core_v1::types::GetAllIngestJobsResponse, Error> {
-        let http_client = self
+        let http_client = self.build_http_client().await?;
+        let base_url = self
             .bulk_client
-            .build_http_client()
-            .await
+            .base_url()
             .map_err(|source| Error::Auth { source })?;
-        let base_url = self.bulk_client.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
@@ -659,5 +685,4 @@ pub enum Error {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}

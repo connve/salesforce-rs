@@ -3,8 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let spec_path = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?)
-        .join("openapi.yaml");
+    let spec_path = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("openapi.yaml");
 
     let spec_content = fs::read_to_string(&spec_path)?;
 
