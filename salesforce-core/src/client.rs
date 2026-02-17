@@ -46,9 +46,9 @@ pub enum Error {
     /// HTTP request failed during OAuth2 token exchange.
     #[error("OAuth2 request failed with status {status}: {body}")]
     OAuth2RequestFailed { status: u16, body: String },
-    /// Required builder parameter was not provided.
-    #[error("Missing required attribute: {attribute}")]
-    MissingRequiredAttribute { attribute: String },
+    /// Credentials were not provided to the builder.
+    #[error("Credentials not provided: call credentials() or credentials_path() before build()")]
+    MissingCredentials,
     /// Client secret is required for this authentication flow.
     #[error("Client secret is required for authentication")]
     MissingClientSecret,
@@ -406,36 +406,14 @@ impl Client {
     /// - Required fields are missing for the auth flow ([`Error::InvalidCredentials`])
     /// - Instance URL is malformed ([`Error::ParseUrl`])
     /// - OAuth2 token exchange fails ([`Error::TokenExchange`])
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn connect(mut self) -> Result<Self, Error> {
-        let credentials = match &self.credentials_from {
-            CredentialsFrom::Value(creds) => creds.clone(),
-            CredentialsFrom::Path(path) => {
-                let credentials_string =
-                    fs::read_to_string(path).map_err(|e| Error::ReadCredentials {
-                        path: path.clone(),
-                        source: e,
-                    })?;
-                serde_json::from_str(&credentials_string)
-                    .map_err(|e| Error::ParseCredentials { source: e })?
-            }
-        };
+        let credentials = self.load_credentials().await?;
 
         // Validate credentials for the selected auth flow
         self.validate_credentials(&credentials)?;
 
-        // Create HTTP client for async requests
-        let http_client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_AUTH_CONNECT_TIMEOUT_SECS,
-            ))
-            .timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
-            ))
-            .build()
-            .map_err(|e| Error::TokenExchange {
-                source: Box::new(e),
-            })?;
+        let http_client = Self::build_auth_http_client()?;
 
         let token_response = match self.auth_flow {
             AuthFlow::ClientCredentials => {
@@ -551,6 +529,72 @@ impl Client {
         })
     }
 
+    /// Loads credentials from the configured source.
+    async fn load_credentials(&self) -> Result<Credentials, Error> {
+        match &self.credentials_from {
+            CredentialsFrom::Value(creds) => Ok(creds.clone()),
+            CredentialsFrom::Path(path) => {
+                let credentials_string =
+                    fs::read_to_string(path).map_err(|e| Error::ReadCredentials {
+                        path: path.clone(),
+                        source: e,
+                    })?;
+                serde_json::from_str(&credentials_string)
+                    .map_err(|e| Error::ParseCredentials { source: e })
+            }
+        }
+    }
+
+    /// Builds an HTTP client for OAuth2 requests.
+    fn build_auth_http_client() -> Result<reqwest::Client, Error> {
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_AUTH_CONNECT_TIMEOUT_SECS,
+            ))
+            .timeout(std::time::Duration::from_secs(
+                crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
+            ))
+            .build()
+            .map_err(|source| Error::HttpClientBuild { source })
+    }
+
+    /// Performs a fresh authentication using the configured auth flow and updates token state
+    /// in-place. This can be called with `&self` since it only needs a write lock on the
+    /// existing `Arc<RwLock<TokenState>>`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Client is not connected ([`Error::NotConnected`])
+    /// - Credentials cannot be loaded ([`Error::ReadCredentials`], [`Error::ParseCredentials`])
+    /// - OAuth2 authentication fails ([`Error::TokenExchange`])
+    /// - Failed to acquire token state lock ([`Error::LockError`])
+    async fn reauthenticate(&self) -> Result<(), Error> {
+        let token_state_arc = self.token_state.as_ref().ok_or(Error::NotConnected)?;
+
+        let credentials = self.load_credentials().await?;
+        self.validate_credentials(&credentials)?;
+
+        let http_client = Self::build_auth_http_client()?;
+
+        let token_response = match self.auth_flow {
+            AuthFlow::ClientCredentials => {
+                self.exchange_client_credentials(&credentials, &http_client)
+                    .await?
+            }
+            AuthFlow::UsernamePassword => {
+                self.exchange_password(&credentials, &http_client).await?
+            }
+        };
+
+        let new_state = TokenState::new(token_response)?;
+        let mut state = token_state_arc.write().map_err(|_| Error::LockError)?;
+        *state = new_state;
+
+        Ok(())
+    }
+
     /// Refreshes the access token using the refresh token.
     ///
     /// This method is called automatically by [`access_token`](Self::access_token)
@@ -572,19 +616,7 @@ impl Client {
             state.refresh_token().ok_or(Error::NoRefreshToken)?.clone()
         };
 
-        // Load credentials for OAuth2 client setup
-        let credentials = match &self.credentials_from {
-            CredentialsFrom::Value(creds) => creds.clone(),
-            CredentialsFrom::Path(path) => {
-                let credentials_string =
-                    fs::read_to_string(path).map_err(|e| Error::ReadCredentials {
-                        path: path.clone(),
-                        source: e,
-                    })?;
-                serde_json::from_str(&credentials_string)
-                    .map_err(|e| Error::ParseCredentials { source: e })?
-            }
-        };
+        let credentials = self.load_credentials().await?;
 
         let client_secret = credentials
             .client_secret
@@ -593,19 +625,7 @@ impl Client {
 
         let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
-        // Create HTTP client
-        let http_client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_AUTH_CONNECT_TIMEOUT_SECS,
-            ))
-            .timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
-            ))
-            .build()
-            .map_err(|e| Error::TokenExchange {
-                source: Box::new(e),
-            })?;
+        let http_client = Self::build_auth_http_client()?;
 
         // Exchange refresh token for new access token
         let response = http_client
@@ -655,10 +675,11 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - Client is not connected ([`Error::NoRefreshToken`])
+    /// - Client is not connected ([`Error::NotConnected`])
     /// - Failed to acquire token state lock ([`Error::LockError`])
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn current_access_token(&self) -> Result<String, Error> {
-        let token_state_arc = self.token_state.as_ref().ok_or(Error::NoRefreshToken)?;
+        let token_state_arc = self.token_state.as_ref().ok_or(Error::NotConnected)?;
 
         let state = token_state_arc.read().map_err(|_| Error::LockError)?;
 
@@ -707,36 +728,12 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn reconnect(&mut self) -> Result<(), Error> {
-        // Load credentials
-        let credentials = match &self.credentials_from {
-            CredentialsFrom::Value(creds) => creds.clone(),
-            CredentialsFrom::Path(path) => {
-                let credentials_string =
-                    fs::read_to_string(path).map_err(|e| Error::ReadCredentials {
-                        path: path.clone(),
-                        source: e,
-                    })?;
-                serde_json::from_str(&credentials_string)
-                    .map_err(|e| Error::ParseCredentials { source: e })?
-            }
-        };
-
+        let credentials = self.load_credentials().await?;
         self.validate_credentials(&credentials)?;
 
-        // Create HTTP client
-        let http_client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_AUTH_CONNECT_TIMEOUT_SECS,
-            ))
-            .timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_AUTH_REQUEST_TIMEOUT_SECS,
-            ))
-            .build()
-            .map_err(|e| Error::TokenExchange {
-                source: Box::new(e),
-            })?;
+        let http_client = Self::build_auth_http_client()?;
 
         // Perform fresh OAuth2 authentication
         let token_response = match self.auth_flow {
@@ -749,7 +746,7 @@ impl Client {
             }
         };
 
-        // Update token state
+        // Update token state (replaces the Arc entirely since we have &mut self)
         let token_state = TokenState::new(token_response)?;
         self.token_state = Some(Arc::new(RwLock::new(token_state)));
 
@@ -797,8 +794,9 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn access_token(&self) -> Result<String, Error> {
-        let token_state_arc = self.token_state.as_ref().ok_or(Error::NoRefreshToken)?;
+        let token_state_arc = self.token_state.as_ref().ok_or(Error::NotConnected)?;
 
         // Check if token needs refresh
         let needs_refresh = {
@@ -807,9 +805,17 @@ impl Client {
             state.is_expired(DEFAULT_TOKEN_REFRESH_BUFFER_SECONDS)?
         };
 
-        // Refresh if needed
         if needs_refresh {
-            self.refresh_token().await?;
+            // Attempt refresh-token flow first. For flows that don't issue a refresh token
+            // (e.g. Client Credentials), this returns `NoRefreshToken` and we fall back to
+            // re-authenticating via the original auth flow instead.
+            match self.refresh_token().await {
+                Ok(()) => {}
+                Err(Error::NoRefreshToken) => {
+                    self.reauthenticate().await?;
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         // Return access token
@@ -902,6 +908,7 @@ impl Builder {
     /// # Returns
     ///
     /// A `Builder` instance for configuring the Salesforce client.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn new() -> Self {
         Self::default()
     }
@@ -970,13 +977,10 @@ impl Builder {
     ///
     /// Returns an error if credentials were not provided via either
     /// [`credentials_path`](Self::credentials_path) or [`credentials`](Self::credentials).
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn build(self) -> Result<Client, Error> {
         Ok(Client {
-            credentials_from: self.credentials_from.ok_or_else(|| {
-                Error::MissingRequiredAttribute {
-                    attribute: "credentials or credentials_path".to_string(),
-                }
-            })?,
+            credentials_from: self.credentials_from.ok_or(Error::MissingCredentials)?,
             auth_flow: self.auth_flow.unwrap_or_default(),
             token_state: None,
             instance_url: None,
@@ -995,10 +999,7 @@ mod tests {
     #[test]
     fn test_build_without_credentials() {
         let client = Builder::new().build();
-        assert!(matches!(
-            client,
-            Err(Error::MissingRequiredAttribute { attribute }) if attribute == "credentials or credentials_path"
-        ));
+        assert!(matches!(client, Err(Error::MissingCredentials)));
     }
 
     #[test]
@@ -1237,7 +1238,7 @@ mod tests {
             .unwrap();
 
         let result = client.current_access_token();
-        assert!(matches!(result, Err(Error::NoRefreshToken)));
+        assert!(matches!(result, Err(Error::NotConnected)));
     }
 
     #[tokio::test]
@@ -1255,7 +1256,49 @@ mod tests {
             .unwrap();
 
         let result = client.access_token().await;
-        assert!(matches!(result, Err(Error::NoRefreshToken)));
+        assert!(matches!(result, Err(Error::NotConnected)));
+    }
+
+    #[tokio::test]
+    async fn test_access_token_reauthenticates_when_expired_and_no_refresh_token() {
+        use oauth2::basic::BasicTokenResponse;
+        use oauth2::AccessToken;
+        use std::time::Duration;
+
+        // Build a connected client with an already-expired token (no refresh token,
+        // as the Client Credentials flow returns).
+        let mut client = Builder::new()
+            .credentials(Credentials {
+                client_id: "test_id".to_string(),
+                client_secret: Some("test_secret".to_string()),
+                username: None,
+                password: None,
+                instance_url: "https://test.salesforce.com".to_string(),
+                tenant_id: "test_tenant".to_string(),
+            })
+            .build()
+            .unwrap();
+
+        // Inject an expired token with no refresh token to simulate Client Credentials expiry.
+        let mut token_response = BasicTokenResponse::new(
+            AccessToken::new("expired_token".to_string()),
+            oauth2::basic::BasicTokenType::Bearer,
+            EmptyExtraTokenFields {},
+        );
+        token_response.set_expires_in(Some(&Duration::from_secs(0)));
+        let token_state = TokenState::new(token_response).unwrap();
+        client.token_state = Some(Arc::new(RwLock::new(token_state)));
+        client.instance_url = Some("https://test.salesforce.com".to_string());
+        client.tenant_id = Some("test_tenant".to_string());
+
+        // access_token() should attempt refresh_token() (fails with NoRefreshToken),
+        // then fall back to reauthenticate() which calls Salesforce and fails with
+        // OAuth2RequestFailed (invalid credentials) - NOT NoRefreshToken.
+        let result = client.access_token().await;
+        assert!(
+            matches!(result, Err(Error::OAuth2RequestFailed { .. })),
+            "expected OAuth2RequestFailed from reauthenticate fallback, got: {result:?}"
+        );
     }
 
     #[tokio::test]

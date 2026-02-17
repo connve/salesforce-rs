@@ -12,9 +12,12 @@ pub enum Error {
     /// OAuth2 token is missing from client.
     #[error("Token response missing")]
     MissingTokenResponse,
-    /// Required client attribute is missing.
-    #[error("Missing required attribute: {attribute}")]
-    MissingRequiredAttribute { attribute: String },
+    /// Salesforce instance URL is missing - client was not connected before use.
+    #[error("Instance URL not available: call connect() on the auth client first")]
+    MissingInstanceUrl,
+    /// Salesforce tenant ID is missing - client was not connected before use.
+    #[error("Tenant ID not available: call connect() on the auth client first")]
+    MissingTenantId,
     /// Failed to create valid gRPC metadata from client credentials.
     #[error("Invalid metadata value for gRPC headers: {source}")]
     InvalidMetadataValue {
@@ -110,18 +113,14 @@ impl Client {
         let instance_url: tonic::metadata::AsciiMetadataValue = client
             .instance_url
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute {
-                attribute: "instance_url".to_string(),
-            })?
+            .ok_or(Error::MissingInstanceUrl)?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
         let tenant_id: tonic::metadata::AsciiMetadataValue = client
             .tenant_id
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute {
-                attribute: "tenant_id".to_string(),
-            })?
+            .ok_or(Error::MissingTenantId)?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -203,9 +202,7 @@ impl Client {
             .client
             .instance_url
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute {
-                attribute: "instance_url".to_string(),
-            })?
+            .ok_or(Error::MissingInstanceUrl)?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -213,9 +210,7 @@ impl Client {
             .client
             .tenant_id
             .as_ref()
-            .ok_or_else(|| Error::MissingRequiredAttribute {
-                attribute: "tenant_id".to_string(),
-            })?
+            .ok_or(Error::MissingTenantId)?
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
 
@@ -418,10 +413,7 @@ mod tests {
         let channel = endpoint.connect_lazy();
 
         let result = Client::new(channel, client);
-        assert!(matches!(
-            result,
-            Err(Error::MissingRequiredAttribute { .. })
-        ));
+        assert!(matches!(result, Err(Error::MissingInstanceUrl)));
     }
 
     #[tokio::test]
@@ -463,10 +455,7 @@ mod tests {
         let channel = endpoint.connect_lazy();
 
         let result = Client::new(channel, client);
-        assert!(matches!(
-            result,
-            Err(Error::MissingRequiredAttribute { .. })
-        ));
+        assert!(matches!(result, Err(Error::MissingTenantId)));
     }
 
     #[tokio::test]
