@@ -697,8 +697,6 @@ pub enum Error {
     },
 }
 
-/// Routes a [`GeneratedError`] to either [`Error::Communication`] (network-level)
-/// or [`Error::BulkApi`] (Salesforce API-level).
 fn classify_generated_error(
     err: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
 ) -> Error {
