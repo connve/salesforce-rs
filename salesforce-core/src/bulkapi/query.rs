@@ -51,9 +51,7 @@ impl QueryClient {
                 crate::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
             ))
             .build()
-            .map_err(|source| Error::Auth {
-                source: client::Error::HttpClientBuild { source },
-            })
+            .map_err(|source| Error::Communication { source })
     }
 
     /// Creates a new bulk query job.
@@ -115,7 +113,7 @@ impl QueryClient {
         let response = client
             .create_query_job(request)
             .await
-            .map_err(|source| Error::BulkApi { source })?;
+            .map_err(classify_generated_error)?;
         Ok(response.into_inner())
     }
 
@@ -168,7 +166,7 @@ impl QueryClient {
         let response = client
             .get_query_job(job_id)
             .await
-            .map_err(|source| Error::BulkApi { source })?;
+            .map_err(classify_generated_error)?;
         Ok(response.into_inner())
     }
 
@@ -239,7 +237,7 @@ impl QueryClient {
         let response = client
             .get_query_job_results(job_id, locator, max_records)
             .await
-            .map_err(|source| Error::BulkApi { source })?;
+            .map_err(classify_generated_error)?;
         Ok(response.into_inner())
     }
 
@@ -289,7 +287,7 @@ impl QueryClient {
         client
             .delete_query_job(job_id)
             .await
-            .map_err(|source| Error::BulkApi { source })?;
+            .map_err(classify_generated_error)?;
         Ok(())
     }
 
@@ -352,7 +350,7 @@ impl QueryClient {
                 },
             )
             .await
-            .map_err(|source| Error::BulkApi { source })?;
+            .map_err(classify_generated_error)?;
         Ok(response.into_inner())
     }
 
@@ -424,7 +422,7 @@ impl QueryClient {
                 query_locator,
             )
             .await
-            .map_err(|source| Error::BulkApi { source })?;
+            .map_err(classify_generated_error)?;
         Ok(response.into_inner())
     }
 
@@ -491,7 +489,7 @@ impl QueryClient {
         let response = client
             .get_query_job_result_pages(job_id, locator)
             .await
-            .map_err(|source| Error::BulkApi { source })?;
+            .map_err(classify_generated_error)?;
         Ok(response.into_inner())
     }
 }
@@ -508,11 +506,37 @@ pub enum Error {
     },
 
     /// Error from the generated Bulk API client.
+    ///
+    /// This variant represents errors returned by Salesforce at the API level,
+    /// such as HTTP 4xx/5xx responses with a structured error body.
     #[error("Bulk API error: {source}")]
     BulkApi {
         #[source]
         source: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
     },
+
+    /// Network-level communication failure.
+    ///
+    /// Covers connection refused, timeouts, TLS errors, HTTP client construction
+    /// failures, and errors reading the response body. Callers can use this
+    /// variant to distinguish transient infrastructure problems from Salesforce
+    /// API errors and apply retry logic accordingly.
+    #[error("Communication error: {source}")]
+    Communication {
+        #[source]
+        source: reqwest::Error,
+    },
+}
+
+fn classify_generated_error(
+    err: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+) -> Error {
+    match err {
+        GeneratedError::CommunicationError(source)
+        | GeneratedError::InvalidUpgrade(source)
+        | GeneratedError::ResponseBodyError(source) => Error::Communication { source },
+        other => Error::BulkApi { source: other },
+    }
 }
 
 #[cfg(test)]
