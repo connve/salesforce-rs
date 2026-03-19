@@ -22,36 +22,19 @@ impl IngestClient {
 
     /// Helper to build an HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        let token = self
-            .bulk_client
-            .auth_client()
-            .access_token()
-            .await
-            .map_err(|source| Error::Auth { source })?;
-
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            reqwest::header::AUTHORIZATION,
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| {
-                Error::Auth {
-                    source: client::Error::LockError,
-                }
-            })?,
-        );
-
-        reqwest::ClientBuilder::new()
-            .default_headers(headers)
-            .connect_timeout(self.bulk_client.connect_timeout())
-            .timeout(self.bulk_client.request_timeout())
-            .tcp_keepalive(std::time::Duration::from_secs(
-                crate::DEFAULT_TCP_KEEPALIVE_SECS,
-            ))
-            .pool_max_idle_per_host(crate::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
-            ))
-            .build()
-            .map_err(|source| Error::Communication { source })
+        crate::http::build_http_client(
+            self.bulk_client.auth_client(),
+            self.bulk_client.connect_timeout(),
+            self.bulk_client.request_timeout(),
+        )
+        .await
+        .map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })
     }
 
     /// Creates a new bulk ingest job.

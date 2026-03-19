@@ -59,3 +59,12 @@ pub mod pubsub;
 
 /// Salesforce Bulk API v2.0 for querying and ingesting large data sets.
 pub mod bulkapi;
+
+/// Salesforce SObject REST API for CRUD operations on individual records.
+pub mod sobject;
+
+/// Salesforce Tooling API for metadata operations.
+pub mod tooling;
+
+/// Shared HTTP client utilities.
+pub(crate) mod http;
