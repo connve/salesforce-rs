@@ -245,7 +245,7 @@ components:
             referenceId:
               type: string
               description: Reference ID for this record (used in tree requests)
-      additionalProperties: true
+      additionalProperties: {}
       description: Record data with attributes and field values
 
     CompositeRecordResult:
@@ -340,7 +340,7 @@ components:
               id:
                 type: string
                 description: Salesforce ID of the record to update
-            additionalProperties: true
+            additionalProperties: {}
 
     CompositeCollectionUpdateResponse:
       type: array
@@ -375,7 +375,7 @@ components:
                   type:
                     type: string
                     description: SObject type name
-            additionalProperties: true
+            additionalProperties: {}
 
     CompositeCollectionUpsertResponse:
       type: array
@@ -424,7 +424,7 @@ components:
             referenceId:
               type: string
               description: Unique reference ID for this record
-      additionalProperties: true
+      additionalProperties: {}
       description: Record with nested child relationships
 
     CompositeTreeRequest:

@@ -217,8 +217,11 @@ impl QueryClient {
             .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
+        // Convert Option<i64> to Option<NonZero<u64>>
+        let max_records_nz = max_records.and_then(|n| std::num::NonZero::new(n as u64));
+
         let response = client
-            .get_query_job_results(job_id, locator, max_records)
+            .get_query_job_results(job_id, locator, max_records_nz)
             .await
             .map_err(classify_generated_error)?;
         Ok(response.into_inner())
