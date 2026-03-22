@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: Salesforce REST API
+  title: Salesforce Bulk API 2.0
   description: |
-    Salesforce REST API including Bulk API v2.0 for programmatic access to
-    Salesforce data and metadata operations.
+    Salesforce Bulk API 2.0 for asynchronously querying and ingesting large data sets.
+    Supports CSV format for both query results and data uploads.
   version: 1.0.0
   contact:
     name: Salesforce Developers

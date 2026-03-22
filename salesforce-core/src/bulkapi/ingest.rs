@@ -2,8 +2,8 @@
 
 use super::Client as BulkClient;
 use crate::client;
-use salesforce_core_v1::types::{CreateIngestJobRequest, IngestJobInfo};
-use salesforce_core_v1::{Client as GeneratedClient, Error as GeneratedError};
+use salesforce_core_bulkapi::types::{CreateIngestJobRequest, IngestJobInfo};
+use salesforce_core_bulkapi::{Client as GeneratedClient, Error as GeneratedError};
 
 /// Client for Bulk API v2.0 Ingest operations.
 ///
@@ -22,36 +22,19 @@ impl IngestClient {
 
     /// Helper to build an HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        let token = self
-            .bulk_client
-            .auth_client()
-            .access_token()
-            .await
-            .map_err(|source| Error::Auth { source })?;
-
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            reqwest::header::AUTHORIZATION,
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| {
-                Error::Auth {
-                    source: client::Error::LockError,
-                }
-            })?,
-        );
-
-        reqwest::ClientBuilder::new()
-            .default_headers(headers)
-            .connect_timeout(self.bulk_client.connect_timeout())
-            .timeout(self.bulk_client.request_timeout())
-            .tcp_keepalive(std::time::Duration::from_secs(
-                crate::DEFAULT_TCP_KEEPALIVE_SECS,
-            ))
-            .pool_max_idle_per_host(crate::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
-            ))
-            .build()
-            .map_err(|source| Error::Communication { source })
+        crate::http::get_http_client(
+            self.bulk_client.auth_client(),
+            self.bulk_client.connect_timeout(),
+            self.bulk_client.request_timeout(),
+        )
+        .await
+        .map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })
     }
 
     /// Creates a new bulk ingest job.
@@ -87,7 +70,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job = ingest_client
@@ -156,7 +139,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.get_job("750xx0000000002AAA").await?;
@@ -211,7 +194,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let csv_data = b"Name,Phone\nAcme Inc,555-1234\nGlobal Corp,555-5678";
@@ -266,7 +249,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.mark_upload_complete("750xx0000000002AAA").await?;
@@ -276,7 +259,7 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn mark_upload_complete(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
-        use salesforce_core_v1::types::{JobState, UpdateIngestJobStateBody};
+        use salesforce_core_bulkapi::types::{JobState, UpdateIngestJobStateBody};
 
         let http_client = self.build_http_client().await?;
         let base_url = self
@@ -329,7 +312,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.abort_job("750xx0000000002AAA").await?;
@@ -339,7 +322,7 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn abort_job(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
-        use salesforce_core_v1::types::{JobState, UpdateIngestJobStateBody};
+        use salesforce_core_bulkapi::types::{JobState, UpdateIngestJobStateBody};
 
         let http_client = self.build_http_client().await?;
         let base_url = self
@@ -388,7 +371,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// ingest_client.delete_job("750xx0000000002AAA").await?;
@@ -443,7 +426,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_successful_results("750xx0000000002AAA").await?;
@@ -458,7 +441,7 @@ impl IngestClient {
     pub async fn get_successful_results(
         &self,
         job_id: &str,
-    ) -> Result<salesforce_core_v1::ByteStream, Error> {
+    ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -505,7 +488,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_failed_results("750xx0000000002AAA").await?;
@@ -520,7 +503,7 @@ impl IngestClient {
     pub async fn get_failed_results(
         &self,
         job_id: &str,
-    ) -> Result<salesforce_core_v1::ByteStream, Error> {
+    ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -567,7 +550,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_unprocessed_results("750xx0000000002AAA").await?;
@@ -582,7 +565,7 @@ impl IngestClient {
     pub async fn get_unprocessed_results(
         &self,
         job_id: &str,
-    ) -> Result<salesforce_core_v1::ByteStream, Error> {
+    ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -630,7 +613,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let jobs = ingest_client.get_all_jobs(None, None, None).await?;
@@ -645,9 +628,9 @@ impl IngestClient {
     pub async fn get_all_jobs(
         &self,
         is_pk_chunking_enabled: Option<bool>,
-        job_type: Option<salesforce_core_v1::types::JobType>,
+        job_type: Option<salesforce_core_bulkapi::types::JobType>,
         query_locator: Option<&str>,
-    ) -> Result<salesforce_core_v1::types::GetAllIngestJobsResponse, Error> {
+    ) -> Result<salesforce_core_bulkapi::types::GetAllIngestJobsResponse, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -681,7 +664,7 @@ pub enum Error {
     #[error("Bulk API error: {source}")]
     BulkApi {
         #[source]
-        source: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+        source: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
     },
 
     /// Network-level communication failure.
@@ -698,7 +681,7 @@ pub enum Error {
 }
 
 fn classify_generated_error(
-    err: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+    err: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
 ) -> Error {
     match err {
         GeneratedError::CommunicationError(source)

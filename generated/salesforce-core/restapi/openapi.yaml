@@ -1,0 +1,1103 @@
+openapi: 3.0.3
+info:
+  title: Salesforce REST API
+  description: |
+    Salesforce REST API for working with SObjects and performing CRUD operations
+    on individual records.
+  version: 1.0.0
+  contact:
+    name: Salesforce Developers
+    url: https://developer.salesforce.com
+
+servers:
+  - url: https://{instance}.salesforce.com/services/data/v{apiVersion}
+    description: Salesforce instance
+    variables:
+      instance:
+        default: yourinstance.my.salesforce
+        description: Your Salesforce instance domain
+      apiVersion:
+        default: "65.0"
+        description: Salesforce API version
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.0 Bearer token
+
+  schemas:
+    # Error Response
+    Error:
+      type: object
+      required:
+        - errorCode
+        - message
+      properties:
+        errorCode:
+          type: string
+          description: Error code identifier
+        message:
+          type: string
+          description: Descriptive error message
+
+    ErrorResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/Error'
+
+    # SObject CRUD Schemas
+    CreateRecordResponse:
+      type: object
+      required:
+        - id
+        - success
+      properties:
+        id:
+          type: string
+          description: Salesforce ID of the created record
+          example: "001xx000003DGb2AAG"
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+          example: true
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    UpdateRecordResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+          example: true
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    DeleteRecordResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+          example: true
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    SObjectField:
+      type: object
+      required:
+        - name
+        - type
+        - label
+        - createable
+        - updateable
+        - nillable
+      properties:
+        name:
+          type: string
+          description: API name of the field
+          example: "AccountNumber"
+        type:
+          type: string
+          description: Field data type
+          example: "string"
+        label:
+          type: string
+          description: Display label for the field
+          example: "Account Number"
+        length:
+          type: integer
+          description: Maximum length for string fields
+          example: 40
+        createable:
+          type: boolean
+          description: Whether the field can be created
+          example: true
+        updateable:
+          type: boolean
+          description: Whether the field can be updated
+          example: true
+        nillable:
+          type: boolean
+          description: Whether the field can be null
+          example: true
+        unique:
+          type: boolean
+          description: Whether the field value must be unique
+          example: false
+        externalId:
+          type: boolean
+          description: Whether the field is an external ID
+          example: false
+        defaultValue:
+          description: Default value for the field
+        referenceTo:
+          type: array
+          description: For reference fields, the referenced object types
+          items:
+            type: string
+          example: ["Account"]
+        relationshipName:
+          type: string
+          description: Name of the relationship
+          example: "Parent"
+        picklistValues:
+          type: array
+          description: For picklist fields, the available values
+          items:
+            type: object
+            properties:
+              active:
+                type: boolean
+              label:
+                type: string
+              value:
+                type: string
+
+    SObjectDescribe:
+      type: object
+      required:
+        - name
+        - label
+        - labelPlural
+        - createable
+        - updateable
+        - deletable
+        - queryable
+        - fields
+      properties:
+        name:
+          type: string
+          description: API name of the SObject
+          example: "Account"
+        label:
+          type: string
+          description: Display label
+          example: "Account"
+        labelPlural:
+          type: string
+          description: Plural display label
+          example: "Accounts"
+        keyPrefix:
+          type: string
+          description: Three-character prefix for IDs
+          example: "001"
+        createable:
+          type: boolean
+          description: Whether records can be created
+          example: true
+        updateable:
+          type: boolean
+          description: Whether records can be updated
+          example: true
+        deletable:
+          type: boolean
+          description: Whether records can be deleted
+          example: true
+        queryable:
+          type: boolean
+          description: Whether the object can be queried
+          example: true
+        fields:
+          type: array
+          description: List of all fields on the object
+          items:
+            $ref: '#/components/schemas/SObjectField'
+        recordTypeInfos:
+          type: array
+          description: Available record types
+          items:
+            type: object
+
+    # Composite API Schemas
+    CompositeRecordRequest:
+      type: object
+      required:
+        - attributes
+      properties:
+        attributes:
+          type: object
+          required:
+            - type
+          properties:
+            type:
+              type: string
+              description: SObject type name
+            referenceId:
+              type: string
+              description: Reference ID for this record (used in tree requests)
+      additionalProperties: {}
+      description: Record data with attributes and field values
+
+    CompositeRecordResult:
+      type: object
+      required:
+        - id
+        - success
+      properties:
+        id:
+          type: string
+          description: Salesforce ID of the record (null if failed)
+          nullable: true
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    CompositeCollectionCreateRequest:
+      type: object
+      required:
+        - allOrNone
+        - records
+      properties:
+        allOrNone:
+          type: boolean
+          description: If true, rolls back entire request if any record fails
+          default: false
+        records:
+          type: array
+          description: Array of records to create (max 200)
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/CompositeRecordRequest'
+
+    CompositeCollectionCreateResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CompositeRecordResult'
+
+    CompositeCollectionRetrieveRequest:
+      type: object
+      required:
+        - ids
+      properties:
+        ids:
+          type: array
+          description: Array of record IDs to retrieve (max 2000)
+          minItems: 1
+          maxItems: 2000
+          items:
+            type: string
+        fields:
+          type: array
+          description: Fields to retrieve for each record
+          items:
+            type: string
+
+    CompositeCollectionUpdateRequest:
+      type: object
+      required:
+        - allOrNone
+        - records
+      properties:
+        allOrNone:
+          type: boolean
+          description: If true, rolls back entire request if any record fails
+          default: false
+        records:
+          type: array
+          description: Array of records to update (max 200)
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required:
+              - attributes
+              - id
+            properties:
+              attributes:
+                type: object
+                required:
+                  - type
+                properties:
+                  type:
+                    type: string
+                    description: SObject type name
+              id:
+                type: string
+                description: Salesforce ID of the record to update
+            additionalProperties: {}
+
+    CompositeCollectionUpdateResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CompositeRecordResult'
+
+    CompositeCollectionUpsertRequest:
+      type: object
+      required:
+        - allOrNone
+        - records
+      properties:
+        allOrNone:
+          type: boolean
+          description: If true, rolls back entire request if any record fails
+          default: false
+        records:
+          type: array
+          description: Array of records to upsert (max 200)
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required:
+              - attributes
+            properties:
+              attributes:
+                type: object
+                required:
+                  - type
+                properties:
+                  type:
+                    type: string
+                    description: SObject type name
+            additionalProperties: {}
+
+    CompositeCollectionUpsertResponse:
+      type: array
+      items:
+        type: object
+        required:
+          - id
+          - success
+          - created
+        properties:
+          id:
+            type: string
+            description: Salesforce ID of the record
+            nullable: true
+          success:
+            type: boolean
+            description: Whether the operation succeeded
+          created:
+            type: boolean
+            description: Whether a new record was created (true) or existing updated (false)
+          errors:
+            type: array
+            description: List of errors (empty on success)
+            items:
+              $ref: '#/components/schemas/Error'
+
+    CompositeCollectionDeleteResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CompositeRecordResult'
+
+    CompositeTreeRecord:
+      type: object
+      required:
+        - attributes
+      properties:
+        attributes:
+          type: object
+          required:
+            - type
+            - referenceId
+          properties:
+            type:
+              type: string
+              description: SObject type name
+            referenceId:
+              type: string
+              description: Unique reference ID for this record
+      additionalProperties: {}
+      description: Record with nested child relationships
+
+    CompositeTreeRequest:
+      type: object
+      required:
+        - records
+      properties:
+        records:
+          type: array
+          description: Array of record trees to create (max 200 total records)
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CompositeTreeRecord'
+
+    CompositeTreeResult:
+      type: object
+      required:
+        - referenceId
+        - id
+      properties:
+        referenceId:
+          type: string
+          description: Reference ID from the request
+        id:
+          type: string
+          description: Salesforce ID of the created record
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    CompositeTreeResponse:
+      type: object
+      required:
+        - hasErrors
+        - results
+      properties:
+        hasErrors:
+          type: boolean
+          description: Whether any records failed to create
+        results:
+          type: array
+          description: Results for each record in the tree
+          items:
+            $ref: '#/components/schemas/CompositeTreeResult'
+
+paths:
+  /sobjects/{sObjectType}:
+    post:
+      summary: Create Record
+      description: |
+        Creates a new record of the specified SObject type with the provided field values.
+      operationId: createRecord
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type (e.g., Account, Contact, CustomObject__c)
+          schema:
+            type: string
+          example: "Account"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Field names and values for the new record
+              example:
+                Name: "Acme Corporation"
+                Industry: "Technology"
+                BillingCity: "San Francisco"
+      responses:
+        '201':
+          description: Record created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateRecordResponse'
+        '400':
+          description: Bad request (invalid field values or missing required fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions to create this object type)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Describe SObject
+      description: |
+        Retrieves metadata for the specified SObject type, including all fields,
+        record types, and permissions.
+      operationId: describeSObject
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+      responses:
+        '200':
+          description: SObject metadata retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SObjectDescribe'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: SObject type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sobjects/{sObjectType}/{recordId}:
+    get:
+      summary: Get Record by ID
+      description: |
+        Retrieves a specific record by its Salesforce ID. You can optionally specify
+        which fields to retrieve using the fields query parameter.
+      operationId: getRecord
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: recordId
+          in: path
+          required: true
+          description: The Salesforce ID of the record (15 or 18 characters)
+          schema:
+            type: string
+          example: "001xx000003DGb2AAG"
+        - name: fields
+          in: query
+          required: false
+          description: Comma-separated list of fields to retrieve
+          schema:
+            type: string
+          example: "Id,Name,Industry,BillingCity"
+      responses:
+        '200':
+          description: Record retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Record data with requested fields
+                example:
+                  Id: "001xx000003DGb2AAG"
+                  Name: "Acme Corporation"
+                  Industry: "Technology"
+                  BillingCity: "San Francisco"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update Record
+      description: |
+        Updates an existing record with the provided field values. Only the fields
+        included in the request body will be updated.
+      operationId: updateRecord
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: recordId
+          in: path
+          required: true
+          description: The Salesforce ID of the record to update
+          schema:
+            type: string
+          example: "001xx000003DGb2AAG"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Field names and new values
+              example:
+                Name: "Acme Corporation (Updated)"
+                Industry: "Manufacturing"
+      responses:
+        '204':
+          description: Record updated successfully (no content returned)
+        '400':
+          description: Bad request (invalid field values)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete Record
+      description: |
+        Deletes the specified record. This moves the record to the Recycle Bin.
+      operationId: deleteRecord
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: recordId
+          in: path
+          required: true
+          description: The Salesforce ID of the record to delete
+          schema:
+            type: string
+          example: "001xx000003DGb2AAG"
+      responses:
+        '204':
+          description: Record deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sobjects/{sObjectType}/{fieldName}/{fieldValue}:
+    get:
+      summary: Get Record by External ID
+      description: |
+        Retrieves a record using an external ID field. If a record with the specified
+        external ID exists, it returns the record. If not, it returns a 404.
+      operationId: getRecordByExternalId
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: fieldName
+          in: path
+          required: true
+          description: The API name of the external ID field
+          schema:
+            type: string
+          example: "ExternalId__c"
+        - name: fieldValue
+          in: path
+          required: true
+          description: The value of the external ID
+          schema:
+            type: string
+          example: "EXT-12345"
+        - name: fields
+          in: query
+          required: false
+          description: Comma-separated list of fields to retrieve
+          schema:
+            type: string
+          example: "Id,Name,ExternalId__c"
+      responses:
+        '200':
+          description: Record retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Record data with requested fields
+        '300':
+          description: Multiple records found (ambiguous external ID)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /composite/sobjects:
+    post:
+      summary: Create Multiple Records
+      description: |
+        Creates up to 200 records in a single request. Records can be of different SObject types.
+      operationId: createRecords
+      tags:
+        - Composite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeCollectionCreateRequest'
+            example:
+              allOrNone: false
+              records:
+                - attributes:
+                    type: "Account"
+                  Name: "Acme Corp"
+                  Industry: "Technology"
+                - attributes:
+                    type: "Contact"
+                  FirstName: "John"
+                  LastName: "Doe"
+      responses:
+        '200':
+          description: Records creation attempted (check individual results for success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionCreateResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update Multiple Records
+      description: |
+        Updates up to 200 records in a single request. Records can be of different SObject types.
+      operationId: updateRecords
+      tags:
+        - Composite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeCollectionUpdateRequest'
+            example:
+              allOrNone: false
+              records:
+                - attributes:
+                    type: "Account"
+                  id: "001xx000003DGb2AAG"
+                  Industry: "Manufacturing"
+                - attributes:
+                    type: "Contact"
+                  id: "003xx000004TmiQAAS"
+                  Title: "VP of Engineering"
+      responses:
+        '200':
+          description: Records update attempted (check individual results for success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionUpdateResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete Multiple Records
+      description: |
+        Deletes up to 200 records in a single request. All records must be of the same SObject type.
+      operationId: deleteRecords
+      tags:
+        - Composite
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: Comma-separated list of record IDs to delete (max 200)
+          schema:
+            type: string
+          example: "001xx000003DGb2AAG,001xx000003DGb3AAG"
+        - name: allOrNone
+          in: query
+          required: false
+          description: If true, rolls back entire request if any record fails
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Records deletion attempted (check individual results for success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionDeleteResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /composite/sobjects/{sObjectType}:
+    post:
+      summary: Retrieve Multiple Records
+      description: |
+        Retrieves up to 2000 records by ID in a single request. All records must be of the same SObject type.
+      operationId: getRecords
+      tags:
+        - Composite
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeCollectionRetrieveRequest'
+            example:
+              ids:
+                - "001xx000003DGb2AAG"
+                - "001xx000003DGb3AAG"
+              fields:
+                - "Id"
+                - "Name"
+                - "Industry"
+      responses:
+        '200':
+          description: Records retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /composite/sobjects/{sObjectType}/{externalIdField}:
+    patch:
+      summary: Upsert Multiple Records
+      description: |
+        Creates or updates up to 200 records in a single request based on an external ID field.
+        All records must be of the same SObject type.
+      operationId: upsertRecords
+      tags:
+        - Composite
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: externalIdField
+          in: path
+          required: true
+          description: The API name of the external ID field
+          schema:
+            type: string
+          example: "ExternalId__c"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeCollectionUpsertRequest'
+            example:
+              allOrNone: false
+              records:
+                - attributes:
+                    type: "Account"
+                  ExternalId__c: "EXT-001"
+                  Name: "Acme Corp"
+                - attributes:
+                    type: "Account"
+                  ExternalId__c: "EXT-002"
+                  Name: "Global Industries"
+      responses:
+        '200':
+          description: Records upsert attempted (check individual results for success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionUpsertResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /composite/tree/{sObjectType}:
+    post:
+      summary: Create Record Tree
+      description: |
+        Creates up to 200 records with parent-child relationships in a single request.
+        Records are created in order to satisfy foreign key relationships.
+      operationId: createRecordTree
+      tags:
+        - Composite
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the parent SObject type
+          schema:
+            type: string
+          example: "Account"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeTreeRequest'
+            example:
+              records:
+                - attributes:
+                    type: "Account"
+                    referenceId: "ref1"
+                  Name: "Acme Corp"
+                  Contacts:
+                    records:
+                      - attributes:
+                          type: "Contact"
+                          referenceId: "ref2"
+                        FirstName: "John"
+                        LastName: "Doe"
+                      - attributes:
+                          type: "Contact"
+                          referenceId: "ref3"
+                        FirstName: "Jane"
+                        LastName: "Smith"
+      responses:
+        '200':
+          description: Record tree creation attempted (check hasErrors and individual results)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeTreeResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: SObject
+    description: SObject REST API operations for CRUD operations on individual records
+  - name: Composite
+    description: Composite API for bulk operations on multiple records

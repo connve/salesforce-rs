@@ -1,6 +1,6 @@
 
 [package]
-name = "salesforce-pubsub-v1"
+name = "salesforce_core_pubsubapi"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ edition.workspace = true
 publish = false
 
 [lib]
-name = "salesforce_pubsub_v1"
+name = "salesforce_core_pubsubapi"
 path = "src/lib.rs"
 
 [dependencies]

@@ -2,8 +2,8 @@
 
 use super::Client as BulkClient;
 use crate::client;
-use salesforce_core_v1::types::{CreateQueryJobRequest, QueryJobInfo};
-use salesforce_core_v1::{ByteStream, Client as GeneratedClient, Error as GeneratedError};
+use salesforce_core_bulkapi::types::{CreateQueryJobRequest, QueryJobInfo};
+use salesforce_core_bulkapi::{ByteStream, Client as GeneratedClient, Error as GeneratedError};
 
 /// Client for Bulk API v2.0 Query operations.
 ///
@@ -22,36 +22,19 @@ impl QueryClient {
 
     /// Helper to build an HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        let token = self
-            .bulk_client
-            .auth_client()
-            .access_token()
-            .await
-            .map_err(|source| Error::Auth { source })?;
-
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            reqwest::header::AUTHORIZATION,
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| {
-                Error::Auth {
-                    source: client::Error::LockError,
-                }
-            })?,
-        );
-
-        reqwest::ClientBuilder::new()
-            .default_headers(headers)
-            .connect_timeout(self.bulk_client.connect_timeout())
-            .timeout(self.bulk_client.request_timeout())
-            .tcp_keepalive(std::time::Duration::from_secs(
-                crate::DEFAULT_TCP_KEEPALIVE_SECS,
-            ))
-            .pool_max_idle_per_host(crate::DEFAULT_POOL_MAX_IDLE_PER_HOST)
-            .pool_idle_timeout(std::time::Duration::from_secs(
-                crate::DEFAULT_POOL_IDLE_TIMEOUT_SECS,
-            ))
-            .build()
-            .map_err(|source| Error::Communication { source })
+        crate::http::get_http_client(
+            self.bulk_client.auth_client(),
+            self.bulk_client.connect_timeout(),
+            self.bulk_client.request_timeout(),
+        )
+        .await
+        .map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })
     }
 
     /// Creates a new bulk query job.
@@ -84,7 +67,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let job = query_client
@@ -146,7 +129,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let job_info = query_client.get_job("750xx0000000001AAA").await?;
@@ -205,7 +188,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let mut results = query_client
@@ -234,8 +217,11 @@ impl QueryClient {
             .map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
+        // Convert Option<i64> to Option<NonZero<u64>>
+        let max_records_nz = max_records.and_then(|n| std::num::NonZero::new(n as u64));
+
         let response = client
-            .get_query_job_results(job_id, locator, max_records)
+            .get_query_job_results(job_id, locator, max_records_nz)
             .await
             .map_err(classify_generated_error)?;
         Ok(response.into_inner())
@@ -268,7 +254,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// query_client.delete_job("750xx0000000001AAA").await?;
@@ -323,7 +309,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let job_info = query_client.abort_job("750xx0000000001AAA").await?;
@@ -333,7 +319,7 @@ impl QueryClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn abort_job(&self, job_id: &str) -> Result<QueryJobInfo, Error> {
-        use salesforce_core_v1::types::{AbortQueryJobBody, AbortQueryJobBodyState};
+        use salesforce_core_bulkapi::types::{AbortQueryJobBody, AbortQueryJobBodyState};
 
         let http_client = self.build_http_client().await?;
         let base_url = self
@@ -388,7 +374,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let jobs = query_client.get_all_jobs(None, None, None, None).await?;
@@ -403,10 +389,10 @@ impl QueryClient {
     pub async fn get_all_jobs(
         &self,
         is_pk_chunking_enabled: Option<bool>,
-        job_type: Option<salesforce_core_v1::types::JobType>,
-        concurrency_mode: Option<salesforce_core_v1::types::ConcurrencyMode>,
+        job_type: Option<salesforce_core_bulkapi::types::JobType>,
+        concurrency_mode: Option<salesforce_core_bulkapi::types::ConcurrencyMode>,
         query_locator: Option<&str>,
-    ) -> Result<salesforce_core_v1::types::QueryJobList, Error> {
+    ) -> Result<salesforce_core_bulkapi::types::QueryJobList, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -461,7 +447,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let result_pages = query_client.get_result_pages("750R0000000zxr8IAA", None).await?;
@@ -478,7 +464,7 @@ impl QueryClient {
         &self,
         job_id: &str,
         locator: Option<&str>,
-    ) -> Result<salesforce_core_v1::types::QueryResultPages, Error> {
+    ) -> Result<salesforce_core_bulkapi::types::QueryResultPages, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -512,7 +498,7 @@ pub enum Error {
     #[error("Bulk API error: {source}")]
     BulkApi {
         #[source]
-        source: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+        source: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
     },
 
     /// Network-level communication failure.
@@ -529,7 +515,7 @@ pub enum Error {
 }
 
 fn classify_generated_error(
-    err: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+    err: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
 ) -> Error {
     match err {
         GeneratedError::CommunicationError(source)

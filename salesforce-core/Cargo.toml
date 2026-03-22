@@ -18,8 +18,10 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
-salesforce_pubsub_v1 = { package = "salesforce-pubsub-v1", path = "../generated/salesforce-pubsub/v1" }
-salesforce_core_v1 = { path = "../generated/salesforce-core/v1" }
+salesforce_core_pubsubapi = { path = "../generated/salesforce-core/pubsubapi" }
+salesforce_core_bulkapi = { path = "../generated/salesforce-core/bulkapi" }
+salesforce_core_restapi = { path = "../generated/salesforce-core/restapi" }
+salesforce_core_toolingapi = { path = "../generated/salesforce-core/toolingapi" }
 oauth2 = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
@@ -28,10 +30,21 @@ tonic = { workspace = true }
 tracing = { workspace = true }
 futures-util = { workspace = true }
 
+[dev-dependencies]
+tracing-subscriber = { workspace = true }
+
 [[example]]
-name = "pubsub"
-path = "../examples/salesforce-core/pubsub.rs"
+name = "pubsubapi"
+path = "../examples/salesforce-core/pubsubapi.rs"
 
 [[example]]
 name = "bulkapi"
 path = "../examples/salesforce-core/bulkapi.rs"
+
+[[example]]
+name = "restapi"
+path = "../examples/salesforce-core/restapi.rs"
+
+[[example]]
+name = "toolingapi"
+path = "../examples/salesforce-core/toolingapi.rs"

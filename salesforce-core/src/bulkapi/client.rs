@@ -32,12 +32,12 @@ use std::sync::Arc;
 ///     .await?;
 ///
 /// // Create a Bulk API client with default API version
-/// let bulk_client = ClientBuilder::new(auth_client.clone()).build();
+/// let bulk_client = ClientBuilder::new(auth_client.clone()).build()?;
 ///
 /// // Or specify a custom API version
 /// let bulk_client_custom = ClientBuilder::new(auth_client)
 ///     .api_version("64.0")
-///     .build();
+///     .build()?;
 ///
 /// // Use query operations
 /// let query_client = bulk_client.query();
@@ -53,6 +53,17 @@ pub struct Client {
     api_version: String,
     connect_timeout: std::time::Duration,
     request_timeout: std::time::Duration,
+}
+
+/// Error type for Bulk API client builder.
+#[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
+pub enum Error {
+    /// Failed to build the client.
+    ///
+    /// This variant is reserved for future validation errors.
+    #[error("Failed to build Bulk API client")]
+    Build,
 }
 
 /// Builder for creating a Bulk API client.
@@ -97,12 +108,12 @@ impl ClientBuilder {
     ///     .await?;
     ///
     /// // Use default API version
-    /// let bulk_client = ClientBuilder::new(auth_client.clone()).build();
+    /// let bulk_client = ClientBuilder::new(auth_client.clone()).build()?;
     ///
     /// // Or specify a custom version
     /// let bulk_client_custom = ClientBuilder::new(auth_client)
     ///     .api_version("64.0")
-    ///     .build();
+    ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -147,7 +158,7 @@ impl ClientBuilder {
     /// #     .await?;
     /// let bulk_client = ClientBuilder::new(auth_client)
     ///     .api_version("64.0")
-    ///     .build();
+    ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -191,7 +202,7 @@ impl ClientBuilder {
     /// #     .await?;
     /// let bulk_client = ClientBuilder::new(auth_client)
     ///     .connect_timeout(Duration::from_secs(60))
-    ///     .build();
+    ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -235,7 +246,7 @@ impl ClientBuilder {
     /// #     .await?;
     /// let bulk_client = ClientBuilder::new(auth_client)
     ///     .request_timeout(Duration::from_secs(300))
-    ///     .build();
+    ///     .build()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -251,6 +262,11 @@ impl ClientBuilder {
     /// # Returns
     ///
     /// A configured `Client` instance ready for use.
+    ///
+    /// # Errors
+    ///
+    /// Currently this method is infallible and always returns `Ok`, but returns
+    /// a `Result` for future compatibility if validation is added.
     ///
     /// # Example
     ///
@@ -271,12 +287,12 @@ impl ClientBuilder {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn build(self) -> Client {
-        Client {
+    pub fn build(self) -> Result<Client, Error> {
+        Ok(Client {
             auth_client: Arc::new(self.auth_client),
             api_version: self
                 .api_version
@@ -291,7 +307,7 @@ impl ClientBuilder {
                 .unwrap_or(std::time::Duration::from_secs(
                     crate::DEFAULT_REQUEST_TIMEOUT_SECS,
                 )),
-        }
+        })
     }
 }
 
@@ -341,7 +357,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     ///
     /// let query_client = bulk_client.query();
     /// # Ok(())
@@ -373,7 +389,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     ///
     /// let ingest_client = bulk_client.ingest();
     /// # Ok(())
@@ -436,7 +452,7 @@ mod tests {
     #[test]
     fn test_base_url_construction() {
         let auth_client = create_mock_auth_client();
-        let bulk_client = ClientBuilder::new(auth_client).build();
+        let bulk_client = ClientBuilder::new(auth_client).build().unwrap();
 
         let base_url = bulk_client.base_url().unwrap();
         assert_eq!(
@@ -452,7 +468,7 @@ mod tests {
     fn test_base_url_with_different_versions() {
         let auth_client = create_mock_auth_client();
 
-        let bulk_client_default = ClientBuilder::new(auth_client.clone()).build();
+        let bulk_client_default = ClientBuilder::new(auth_client.clone()).build().unwrap();
         assert_eq!(
             bulk_client_default.base_url().unwrap(),
             format!(
@@ -461,7 +477,10 @@ mod tests {
             )
         );
 
-        let bulk_client_59 = ClientBuilder::new(auth_client).api_version("59.0").build();
+        let bulk_client_59 = ClientBuilder::new(auth_client)
+            .api_version("59.0")
+            .build()
+            .unwrap();
         assert_eq!(
             bulk_client_59.base_url().unwrap(),
             "https://test.salesforce.com/services/data/v59.0"
@@ -485,7 +504,10 @@ mod tests {
         // Manually clear instance_url to simulate unconnected state
         client.instance_url = None;
 
-        let bulk_client = ClientBuilder::new(client).api_version("58.0").build();
+        let bulk_client = ClientBuilder::new(client)
+            .api_version("58.0")
+            .build()
+            .unwrap();
         let result = bulk_client.base_url();
 
         assert!(result.is_err());

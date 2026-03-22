@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect()
         .await?;
 
-    let bulk_client = ClientBuilder::new(auth_client).build();
+    let bulk_client = ClientBuilder::new(auth_client).build()?;
     let query_client = bulk_client.query();
 
     info!("Creating a query job");
