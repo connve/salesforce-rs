@@ -1,19 +1,16 @@
 //! Salesforce Tooling API for metadata operations.
 //!
-//! This module provides access to the Salesforce Tooling API, which allows you to:
-//! - Create and manage ManagedEventSubscription records
-//! - Work with metadata objects
-//! - Perform development and deployment operations
+//! This module provides access to the Salesforce Tooling API.
 //!
-//! The Tooling API is a REST API that provides endpoints for working with metadata
-//! and development tools in Salesforce.
+//! ## Currently Supported Operations
+//!
+//! - Create ManagedEventSubscription records via POST endpoint
 //!
 //! # Examples
 //!
 //! ```no_run
 //! use salesforce_core::client::{self, Credentials};
-//! use salesforce_core::tooling::{self, ManagedEventSubscriptionMetadata, ReplayPreset};
-//! use serde_json::json;
+//! use salesforce_core::toolingapi::{self, ManagedEventSubscriptionMetadata, ReplayPreset};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,16 +27,16 @@
 //!     .connect()
 //!     .await?;
 //!
-//! let tooling_client = tooling::ClientBuilder::new(auth_client).build();
+//! let tooling_client = toolingapi::ClientBuilder::new(auth_client).build();
 //!
 //! // Create a managed event subscription
-//! let subscription = tooling::CreateManagedEventSubscriptionRequest {
+//! let subscription = toolingapi::CreateManagedEventSubscriptionRequest {
 //!     full_name: "Managed_Sub_OpportunityChangeEvent".to_string(),
 //!     metadata: ManagedEventSubscriptionMetadata {
 //!         label: "Managed Sub OpportunityChangeEvent".to_string(),
 //!         topic_name: "/data/OpportunityChangeEvent".to_string(),
 //!         default_replay: ReplayPreset::Latest,
-//!         state: tooling::SubscriptionState::Run,
+//!         state: toolingapi::SubscriptionState::Run,
 //!         error_recovery_replay: ReplayPreset::Latest,
 //!     },
 //! };

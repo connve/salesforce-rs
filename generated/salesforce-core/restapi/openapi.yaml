@@ -1,0 +1,552 @@
+openapi: 3.0.3
+info:
+  title: Salesforce REST API
+  description: |
+    Salesforce REST API for working with SObjects and performing CRUD operations
+    on individual records.
+  version: 1.0.0
+  contact:
+    name: Salesforce Developers
+    url: https://developer.salesforce.com
+
+servers:
+  - url: https://{instance}.salesforce.com/services/data/v{apiVersion}
+    description: Salesforce instance
+    variables:
+      instance:
+        default: yourinstance.my.salesforce
+        description: Your Salesforce instance domain
+      apiVersion:
+        default: "65.0"
+        description: Salesforce API version
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.0 Bearer token
+
+  schemas:
+    # Error Response
+    Error:
+      type: object
+      required:
+        - errorCode
+        - message
+      properties:
+        errorCode:
+          type: string
+          description: Error code identifier
+        message:
+          type: string
+          description: Descriptive error message
+
+    ErrorResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/Error'
+
+    # SObject CRUD Schemas
+    CreateRecordResponse:
+      type: object
+      required:
+        - id
+        - success
+      properties:
+        id:
+          type: string
+          description: Salesforce ID of the created record
+          example: "001xx000003DGb2AAG"
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+          example: true
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    UpdateRecordResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+          example: true
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    DeleteRecordResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+          example: true
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    SObjectField:
+      type: object
+      required:
+        - name
+        - type
+        - label
+        - createable
+        - updateable
+        - nillable
+      properties:
+        name:
+          type: string
+          description: API name of the field
+          example: "AccountNumber"
+        type:
+          type: string
+          description: Field data type
+          example: "string"
+        label:
+          type: string
+          description: Display label for the field
+          example: "Account Number"
+        length:
+          type: integer
+          description: Maximum length for string fields
+          example: 40
+        createable:
+          type: boolean
+          description: Whether the field can be created
+          example: true
+        updateable:
+          type: boolean
+          description: Whether the field can be updated
+          example: true
+        nillable:
+          type: boolean
+          description: Whether the field can be null
+          example: true
+        unique:
+          type: boolean
+          description: Whether the field value must be unique
+          example: false
+        externalId:
+          type: boolean
+          description: Whether the field is an external ID
+          example: false
+        defaultValue:
+          description: Default value for the field
+        referenceTo:
+          type: array
+          description: For reference fields, the referenced object types
+          items:
+            type: string
+          example: ["Account"]
+        relationshipName:
+          type: string
+          description: Name of the relationship
+          example: "Parent"
+        picklistValues:
+          type: array
+          description: For picklist fields, the available values
+          items:
+            type: object
+            properties:
+              active:
+                type: boolean
+              label:
+                type: string
+              value:
+                type: string
+
+    SObjectDescribe:
+      type: object
+      required:
+        - name
+        - label
+        - labelPlural
+        - createable
+        - updateable
+        - deletable
+        - queryable
+        - fields
+      properties:
+        name:
+          type: string
+          description: API name of the SObject
+          example: "Account"
+        label:
+          type: string
+          description: Display label
+          example: "Account"
+        labelPlural:
+          type: string
+          description: Plural display label
+          example: "Accounts"
+        keyPrefix:
+          type: string
+          description: Three-character prefix for IDs
+          example: "001"
+        createable:
+          type: boolean
+          description: Whether records can be created
+          example: true
+        updateable:
+          type: boolean
+          description: Whether records can be updated
+          example: true
+        deletable:
+          type: boolean
+          description: Whether records can be deleted
+          example: true
+        queryable:
+          type: boolean
+          description: Whether the object can be queried
+          example: true
+        fields:
+          type: array
+          description: List of all fields on the object
+          items:
+            $ref: '#/components/schemas/SObjectField'
+        recordTypeInfos:
+          type: array
+          description: Available record types
+          items:
+            type: object
+
+paths:
+  /sobjects/{sObjectType}:
+    post:
+      summary: Create Record
+      description: |
+        Creates a new record of the specified SObject type with the provided field values.
+      operationId: createRecord
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type (e.g., Account, Contact, CustomObject__c)
+          schema:
+            type: string
+          example: "Account"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Field names and values for the new record
+              example:
+                Name: "Acme Corporation"
+                Industry: "Technology"
+                BillingCity: "San Francisco"
+      responses:
+        '201':
+          description: Record created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateRecordResponse'
+        '400':
+          description: Bad request (invalid field values or missing required fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized (invalid or missing access token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions to create this object type)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Describe SObject
+      description: |
+        Retrieves metadata for the specified SObject type, including all fields,
+        record types, and permissions.
+      operationId: describeSObject
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+      responses:
+        '200':
+          description: SObject metadata retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SObjectDescribe'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: SObject type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sobjects/{sObjectType}/{recordId}:
+    get:
+      summary: Get Record by ID
+      description: |
+        Retrieves a specific record by its Salesforce ID. You can optionally specify
+        which fields to retrieve using the fields query parameter.
+      operationId: getRecord
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: recordId
+          in: path
+          required: true
+          description: The Salesforce ID of the record (15 or 18 characters)
+          schema:
+            type: string
+          example: "001xx000003DGb2AAG"
+        - name: fields
+          in: query
+          required: false
+          description: Comma-separated list of fields to retrieve
+          schema:
+            type: string
+          example: "Id,Name,Industry,BillingCity"
+      responses:
+        '200':
+          description: Record retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Record data with requested fields
+                example:
+                  Id: "001xx000003DGb2AAG"
+                  Name: "Acme Corporation"
+                  Industry: "Technology"
+                  BillingCity: "San Francisco"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update Record
+      description: |
+        Updates an existing record with the provided field values. Only the fields
+        included in the request body will be updated.
+      operationId: updateRecord
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: recordId
+          in: path
+          required: true
+          description: The Salesforce ID of the record to update
+          schema:
+            type: string
+          example: "001xx000003DGb2AAG"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Field names and new values
+              example:
+                Name: "Acme Corporation (Updated)"
+                Industry: "Manufacturing"
+      responses:
+        '204':
+          description: Record updated successfully (no content returned)
+        '400':
+          description: Bad request (invalid field values)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete Record
+      description: |
+        Deletes the specified record. This moves the record to the Recycle Bin.
+      operationId: deleteRecord
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: recordId
+          in: path
+          required: true
+          description: The Salesforce ID of the record to delete
+          schema:
+            type: string
+          example: "001xx000003DGb2AAG"
+      responses:
+        '204':
+          description: Record deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sobjects/{sObjectType}/{fieldName}/{fieldValue}:
+    get:
+      summary: Get Record by External ID
+      description: |
+        Retrieves a record using an external ID field. If a record with the specified
+        external ID exists, it returns the record. If not, it returns a 404.
+      operationId: getRecordByExternalId
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: fieldName
+          in: path
+          required: true
+          description: The API name of the external ID field
+          schema:
+            type: string
+          example: "ExternalId__c"
+        - name: fieldValue
+          in: path
+          required: true
+          description: The value of the external ID
+          schema:
+            type: string
+          example: "EXT-12345"
+        - name: fields
+          in: query
+          required: false
+          description: Comma-separated list of fields to retrieve
+          schema:
+            type: string
+          example: "Id,Name,ExternalId__c"
+      responses:
+        '200':
+          description: Record retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Record data with requested fields
+        '300':
+          description: Multiple records found (ambiguous external ID)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: SObject
+    description: SObject REST API operations for CRUD operations on individual records

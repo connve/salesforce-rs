@@ -1,5 +1,5 @@
 use crate::client;
-use salesforce_pubsub_v1::eventbus::v1::pub_sub_client::PubSubClient;
+use salesforce_core_pubsubapi::eventbus::v1::pub_sub_client::PubSubClient;
 use tokio_stream::StreamExt;
 
 /// Errors that can occur during Pub/Sub operations.
@@ -63,7 +63,7 @@ impl tonic::service::Interceptor for ContextInterceptor {
 ///
 /// ```no_run
 /// use salesforce_core::client;
-/// use salesforce_core::pubsub::{Client, ENDPOINT};
+/// use salesforce_core::pubsubapi::{Client, ENDPOINT};
 /// use std::path::PathBuf;
 ///
 /// # #[tokio::main]
@@ -84,7 +84,7 @@ impl tonic::service::Interceptor for ContextInterceptor {
 /// ```
 #[derive(Debug)]
 pub struct Client {
-    pubsub: salesforce_pubsub_v1::eventbus::v1::pub_sub_client::PubSubClient<
+    pubsub: salesforce_core_pubsubapi::eventbus::v1::pub_sub_client::PubSubClient<
         tonic::service::interceptor::InterceptedService<
             tonic::transport::Channel,
             ContextInterceptor,
@@ -158,7 +158,7 @@ impl Client {
     ///
     /// ```no_run
     /// use salesforce_core::client;
-    /// use salesforce_core::pubsub::{Client, ENDPOINT};
+    /// use salesforce_core::pubsubapi::{Client, ENDPOINT};
     /// use std::path::PathBuf;
     ///
     /// # #[tokio::main]
@@ -233,8 +233,8 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_topic(
         &mut self,
-        request: salesforce_pubsub_v1::eventbus::v1::TopicRequest,
-    ) -> Result<tonic::Response<salesforce_pubsub_v1::eventbus::v1::TopicInfo>, Error> {
+        request: salesforce_core_pubsubapi::eventbus::v1::TopicRequest,
+    ) -> Result<tonic::Response<salesforce_core_pubsubapi::eventbus::v1::TopicInfo>, Error> {
         self.pubsub
             .get_topic(tonic::Request::new(request))
             .await
@@ -247,8 +247,8 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_schema(
         &mut self,
-        request: salesforce_pubsub_v1::eventbus::v1::SchemaRequest,
-    ) -> Result<tonic::Response<salesforce_pubsub_v1::eventbus::v1::SchemaInfo>, Error> {
+        request: salesforce_core_pubsubapi::eventbus::v1::SchemaRequest,
+    ) -> Result<tonic::Response<salesforce_core_pubsubapi::eventbus::v1::SchemaInfo>, Error> {
         self.pubsub
             .get_schema(tonic::Request::new(request))
             .await
@@ -262,8 +262,8 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn publish(
         &mut self,
-        request: salesforce_pubsub_v1::eventbus::v1::PublishRequest,
-    ) -> Result<tonic::Response<salesforce_pubsub_v1::eventbus::v1::PublishResponse>, Error> {
+        request: salesforce_core_pubsubapi::eventbus::v1::PublishRequest,
+    ) -> Result<tonic::Response<salesforce_core_pubsubapi::eventbus::v1::PublishResponse>, Error> {
         self.pubsub
             .publish(tonic::Request::new(request))
             .await
@@ -277,9 +277,9 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn subscribe(
         &mut self,
-        request: salesforce_pubsub_v1::eventbus::v1::FetchRequest,
+        request: salesforce_core_pubsubapi::eventbus::v1::FetchRequest,
     ) -> Result<
-        tonic::Response<tonic::codec::Streaming<salesforce_pubsub_v1::eventbus::v1::FetchResponse>>,
+        tonic::Response<tonic::codec::Streaming<salesforce_core_pubsubapi::eventbus::v1::FetchResponse>>,
         Error,
     > {
         self.pubsub
@@ -299,10 +299,10 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn managed_subscribe(
         &mut self,
-        request: salesforce_pubsub_v1::eventbus::v1::ManagedFetchRequest,
+        request: salesforce_core_pubsubapi::eventbus::v1::ManagedFetchRequest,
     ) -> Result<
         tonic::Response<
-            tonic::codec::Streaming<salesforce_pubsub_v1::eventbus::v1::ManagedFetchResponse>,
+            tonic::codec::Streaming<salesforce_core_pubsubapi::eventbus::v1::ManagedFetchResponse>,
         >,
         Error,
     > {
@@ -323,10 +323,10 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn publish_stream(
         &mut self,
-        request: salesforce_pubsub_v1::eventbus::v1::PublishRequest,
+        request: salesforce_core_pubsubapi::eventbus::v1::PublishRequest,
     ) -> Result<
         tonic::Response<
-            tonic::codec::Streaming<salesforce_pubsub_v1::eventbus::v1::PublishResponse>,
+            tonic::codec::Streaming<salesforce_core_pubsubapi::eventbus::v1::PublishResponse>,
         >,
         Error,
     > {

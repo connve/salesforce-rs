@@ -1,6 +1,6 @@
-//! Salesforce Bulk API v2.0 for querying and ingesting large data sets.
+//! Salesforce Bulk API 2.0 for querying and ingesting large data sets.
 //!
-//! This module provides access to the Salesforce Bulk API v2.0, which allows you to:
+//! This module provides access to the Salesforce Bulk API 2.0, which allows you to:
 //! - **Query**: Asynchronously query large data sets using SOQL
 //! - **Ingest**: Load, update, upsert, or delete large numbers of records
 //!
@@ -52,7 +52,7 @@ pub use ingest::Error as IngestError;
 pub use query::Error as QueryError;
 
 /// Re-export commonly used types from the generated client.
-pub use salesforce_core_v1::types::{
+pub use salesforce_core_bulkapi::types::{
     // Enums
     ColumnDelimiter,
     ConcurrencyMode,
@@ -69,9 +69,9 @@ pub use salesforce_core_v1::types::{
     LineEnding,
     QueryJobInfo,
     QueryJobList,
-    QueryOperation,
     QueryResultPages,
+    QueryOperation,
 };
 
 /// Re-export ByteStream for handling streaming results.
-pub use salesforce_core_v1::ByteStream;
+pub use salesforce_core_bulkapi::ByteStream;

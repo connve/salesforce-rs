@@ -9,8 +9,8 @@
 //!
 //! ```no_run
 //! use salesforce_core::client;
-//! use salesforce_core::pubsub::Client as PubSubClient;
-//! use salesforce_pubsub_v1::eventbus;
+//! use salesforce_core::pubsubapi::Client as PubSubClient;
+//! use salesforce_core_pubsubapi::eventbus;
 //! use std::path::PathBuf;
 //!
 //! # #[tokio::main]
@@ -36,7 +36,7 @@ pub use client::Client;
 pub use client::Error as PubSubError;
 
 /// Re-export commonly used types from the generated gRPC client.
-pub use salesforce_pubsub_v1::eventbus::{self, v1::*};
+pub use salesforce_core_pubsubapi::eventbus::{self, v1::*};
 
 /// Constant for the Pub/Sub API endpoint.
-pub use salesforce_pubsub_v1::eventbus::ENDPOINT;
+pub use salesforce_core_pubsubapi::eventbus::ENDPOINT;

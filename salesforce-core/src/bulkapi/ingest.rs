@@ -2,8 +2,8 @@
 
 use super::Client as BulkClient;
 use crate::client;
-use salesforce_core_v1::types::{CreateIngestJobRequest, IngestJobInfo};
-use salesforce_core_v1::{Client as GeneratedClient, Error as GeneratedError};
+use salesforce_core_bulkapi::types::{CreateIngestJobRequest, IngestJobInfo};
+use salesforce_core_bulkapi::{Client as GeneratedClient, Error as GeneratedError};
 
 /// Client for Bulk API v2.0 Ingest operations.
 ///
@@ -259,7 +259,7 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn mark_upload_complete(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
-        use salesforce_core_v1::types::{JobState, UpdateIngestJobStateBody};
+        use salesforce_core_bulkapi::types::{JobState, UpdateIngestJobStateBody};
 
         let http_client = self.build_http_client().await?;
         let base_url = self
@@ -322,7 +322,7 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn abort_job(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
-        use salesforce_core_v1::types::{JobState, UpdateIngestJobStateBody};
+        use salesforce_core_bulkapi::types::{JobState, UpdateIngestJobStateBody};
 
         let http_client = self.build_http_client().await?;
         let base_url = self
@@ -441,7 +441,7 @@ impl IngestClient {
     pub async fn get_successful_results(
         &self,
         job_id: &str,
-    ) -> Result<salesforce_core_v1::ByteStream, Error> {
+    ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -503,7 +503,7 @@ impl IngestClient {
     pub async fn get_failed_results(
         &self,
         job_id: &str,
-    ) -> Result<salesforce_core_v1::ByteStream, Error> {
+    ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -565,7 +565,7 @@ impl IngestClient {
     pub async fn get_unprocessed_results(
         &self,
         job_id: &str,
-    ) -> Result<salesforce_core_v1::ByteStream, Error> {
+    ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -628,9 +628,9 @@ impl IngestClient {
     pub async fn get_all_jobs(
         &self,
         is_pk_chunking_enabled: Option<bool>,
-        job_type: Option<salesforce_core_v1::types::JobType>,
+        job_type: Option<salesforce_core_bulkapi::types::JobType>,
         query_locator: Option<&str>,
-    ) -> Result<salesforce_core_v1::types::GetAllIngestJobsResponse, Error> {
+    ) -> Result<salesforce_core_bulkapi::types::GetAllIngestJobsResponse, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -664,7 +664,7 @@ pub enum Error {
     #[error("Bulk API error: {source}")]
     BulkApi {
         #[source]
-        source: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+        source: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
     },
 
     /// Network-level communication failure.
@@ -681,7 +681,7 @@ pub enum Error {
 }
 
 fn classify_generated_error(
-    err: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+    err: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
 ) -> Error {
     match err {
         GeneratedError::CommunicationError(source)

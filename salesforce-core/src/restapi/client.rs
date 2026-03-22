@@ -1,4 +1,4 @@
-//! SObject API client wrapper.
+//! REST API client wrapper.
 
 use crate::client;
 use std::sync::Arc;
@@ -6,19 +6,19 @@ use std::time::Duration;
 
 use crate::{DEFAULT_API_VERSION, DEFAULT_CONNECT_TIMEOUT_SECS, DEFAULT_REQUEST_TIMEOUT_SECS};
 
-/// Client for Salesforce SObject CRUD operations.
+/// Client for Salesforce REST API operations.
 ///
 /// This client wraps the authenticated Salesforce client and provides
-/// methods for creating, reading, updating, and deleting individual records.
+/// access to REST API resources including SObject CRUD, queries, and searches.
 #[derive(Clone, Debug)]
 pub struct Client {
-    auth_client: Arc<client::Client>,
-    api_version: String,
-    connect_timeout: Duration,
-    request_timeout: Duration,
+    pub(crate) auth_client: Arc<client::Client>,
+    pub(crate) api_version: String,
+    pub(crate) connect_timeout: Duration,
+    pub(crate) request_timeout: Duration,
 }
 
-/// Builder for creating a SObject API client.
+/// Builder for creating a REST API client.
 pub struct ClientBuilder {
     auth_client: client::Client,
     api_version: Option<String>,
@@ -27,7 +27,7 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    /// Creates a new SObject API client builder.
+    /// Creates a new REST API client builder.
     ///
     /// # Arguments
     ///
@@ -37,7 +37,7 @@ impl ClientBuilder {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::sobject;
+    /// use salesforce_core::restapi;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,7 +54,7 @@ impl ClientBuilder {
     ///     .connect()
     ///     .await?;
     ///
-    /// let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
     /// # Ok(())
     /// # }
     /// ```

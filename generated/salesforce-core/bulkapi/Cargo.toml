@@ -1,5 +1,5 @@
 [package]
-name = "salesforce_core_v1"
+name = "salesforce_core_bulkapi"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ edition.workspace = true
 publish = false
 
 [lib]
-name = "salesforce_core_v1"
+name = "salesforce_core_bulkapi"
 path = "src/lib.rs"
 
 [dependencies]

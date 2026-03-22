@@ -1,13 +1,16 @@
-//! Salesforce SObject REST API for CRUD operations on individual records.
+//! Salesforce REST API.
 //!
-//! This module provides a high-level interface for creating, reading, updating,
-//! and deleting Salesforce records using the REST API.
+//! This module provides access to Salesforce REST API resources.
+//!
+//! ## Currently Supported Operations
+//!
+//! - SObject CRUD operations (create, read, update, delete, describe)
 //!
 //! # Examples
 //!
 //! ```no_run
 //! use salesforce_core::client::{self, Credentials};
-//! use salesforce_core::sobject;
+//! use salesforce_core::restapi;
 //! use serde_json::json;
 //!
 //! # #[tokio::main]
@@ -25,32 +28,22 @@
 //!     .connect()
 //!     .await?;
 //!
-//! let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+//! let rest_client = restapi::ClientBuilder::new(auth_client).build();
 //!
 //! // Create a record
-//! let account_data = json!({
+//! let data = json!({
 //!     "Name": "Acme Corporation",
 //!     "Industry": "Technology"
 //! });
-//! let record_id = sobject_client.create("Account", account_data).await?;
-//!
-//! // Read a record
-//! let record = sobject_client.get("Account", &record_id, None).await?;
-//!
-//! // Update a record
-//! let update_data = json!({
-//!     "Industry": "Manufacturing"
-//! });
-//! sobject_client.update("Account", &record_id, update_data).await?;
-//!
-//! // Delete a record
-//! sobject_client.delete("Account", &record_id).await?;
+//! let record_id = rest_client.create("Account", data).await?;
 //! # Ok(())
 //! # }
 //! ```
 
+/// REST API client and builder.
 mod client;
-mod crud;
+
+/// SObject CRUD operations for individual records.
+pub mod sobject;
 
 pub use client::{Client, ClientBuilder};
-pub use crud::Error;

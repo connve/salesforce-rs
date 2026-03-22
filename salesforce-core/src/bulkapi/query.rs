@@ -2,8 +2,8 @@
 
 use super::Client as BulkClient;
 use crate::client;
-use salesforce_core_v1::types::{CreateQueryJobRequest, QueryJobInfo};
-use salesforce_core_v1::{ByteStream, Client as GeneratedClient, Error as GeneratedError};
+use salesforce_core_bulkapi::types::{CreateQueryJobRequest, QueryJobInfo};
+use salesforce_core_bulkapi::{ByteStream, Client as GeneratedClient, Error as GeneratedError};
 
 /// Client for Bulk API v2.0 Query operations.
 ///
@@ -316,7 +316,7 @@ impl QueryClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn abort_job(&self, job_id: &str) -> Result<QueryJobInfo, Error> {
-        use salesforce_core_v1::types::{AbortQueryJobBody, AbortQueryJobBodyState};
+        use salesforce_core_bulkapi::types::{AbortQueryJobBody, AbortQueryJobBodyState};
 
         let http_client = self.build_http_client().await?;
         let base_url = self
@@ -386,10 +386,10 @@ impl QueryClient {
     pub async fn get_all_jobs(
         &self,
         is_pk_chunking_enabled: Option<bool>,
-        job_type: Option<salesforce_core_v1::types::JobType>,
-        concurrency_mode: Option<salesforce_core_v1::types::ConcurrencyMode>,
+        job_type: Option<salesforce_core_bulkapi::types::JobType>,
+        concurrency_mode: Option<salesforce_core_bulkapi::types::ConcurrencyMode>,
         query_locator: Option<&str>,
-    ) -> Result<salesforce_core_v1::types::QueryJobList, Error> {
+    ) -> Result<salesforce_core_bulkapi::types::QueryJobList, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -461,7 +461,7 @@ impl QueryClient {
         &self,
         job_id: &str,
         locator: Option<&str>,
-    ) -> Result<salesforce_core_v1::types::QueryResultPages, Error> {
+    ) -> Result<salesforce_core_bulkapi::types::QueryResultPages, Error> {
         let http_client = self.build_http_client().await?;
         let base_url = self
             .bulk_client
@@ -495,7 +495,7 @@ pub enum Error {
     #[error("Bulk API error: {source}")]
     BulkApi {
         #[source]
-        source: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+        source: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
     },
 
     /// Network-level communication failure.
@@ -512,7 +512,7 @@ pub enum Error {
 }
 
 fn classify_generated_error(
-    err: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+    err: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
 ) -> Error {
     match err {
         GeneratedError::CommunicationError(source)

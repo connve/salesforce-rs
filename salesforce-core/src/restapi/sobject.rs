@@ -1,9 +1,9 @@
 //! SObject CRUD operations implementation.
 
-use super::Client as SObjectClient;
+use super::Client;
 use crate::client;
-use salesforce_core_v1::types::SObjectDescribe;
-use salesforce_core_v1::{Client as GeneratedClient, Error as GeneratedError};
+use salesforce_core_restapi::types::SObjectDescribe;
+use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
 
 /// Error type for SObject operations.
@@ -24,7 +24,7 @@ pub enum Error {
     #[error("SObject API error: {source}")]
     SObjectApi {
         #[source]
-        source: GeneratedError<salesforce_core_v1::types::ErrorResponse>,
+        source: GeneratedError<salesforce_core_restapi::types::ErrorResponse>,
     },
 
     /// Network-level communication failure.
@@ -49,7 +49,7 @@ pub enum Error {
     InvalidDataType { actual_type: String },
 }
 
-impl SObjectClient {
+impl Client {
     /// Helper to build an HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
         crate::http::build_http_client(
@@ -82,7 +82,7 @@ impl SObjectClient {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::sobject;
+    /// use salesforce_core::restapi;
     /// use serde_json::json;
     ///
     /// # #[tokio::main]
@@ -99,7 +99,7 @@ impl SObjectClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
     ///
     /// let data = json!({
     ///     "Name": "Acme Corporation",
@@ -107,7 +107,7 @@ impl SObjectClient {
     ///     "BillingCity": "San Francisco"
     /// });
     ///
-    /// let record_id = sobject_client.create("Account", data).await?;
+    /// let record_id = rest_client.create("Account", data).await?;
     /// println!("Created record: {}", record_id);
     /// # Ok(())
     /// # }
@@ -163,7 +163,7 @@ impl SObjectClient {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::sobject;
+    /// use salesforce_core::restapi;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -179,13 +179,13 @@ impl SObjectClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
     ///
     /// // Get all fields
-    /// let record = sobject_client.get("Account", "001xx000003DGb2AAG", None).await?;
+    /// let record = rest_client.get("Account", "001xx000003DGb2AAG", None).await?;
     ///
     /// // Get specific fields
-    /// let record = sobject_client.get(
+    /// let record = rest_client.get(
     ///     "Account",
     ///     "001xx000003DGb2AAG",
     ///     Some("Id,Name,Industry")
@@ -230,7 +230,7 @@ impl SObjectClient {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::sobject;
+    /// use salesforce_core::restapi;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -246,9 +246,9 @@ impl SObjectClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
     ///
-    /// let record = sobject_client.get_by_external_id(
+    /// let record = rest_client.get_by_external_id(
     ///     "Account",
     ///     "ExternalId__c",
     ///     "EXT-12345",
@@ -291,7 +291,7 @@ impl SObjectClient {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::sobject;
+    /// use salesforce_core::restapi;
     /// use serde_json::json;
     ///
     /// # #[tokio::main]
@@ -308,14 +308,14 @@ impl SObjectClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
     ///
     /// let data = json!({
     ///     "Name": "Acme Corporation (Updated)",
     ///     "Industry": "Manufacturing"
     /// });
     ///
-    /// sobject_client.update("Account", "001xx000003DGb2AAG", data).await?;
+    /// rest_client.update("Account", "001xx000003DGb2AAG", data).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -367,7 +367,7 @@ impl SObjectClient {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::sobject;
+    /// use salesforce_core::restapi;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -383,9 +383,9 @@ impl SObjectClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
     ///
-    /// sobject_client.delete("Account", "001xx000003DGb2AAG").await?;
+    /// rest_client.delete("Account", "001xx000003DGb2AAG").await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -424,7 +424,7 @@ impl SObjectClient {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::sobject;
+    /// use salesforce_core::restapi;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -440,9 +440,9 @@ impl SObjectClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
     ///
-    /// let metadata = sobject_client.describe("Account").await?;
+    /// let metadata = rest_client.describe("Account").await?;
     /// println!("SObject: {} ({})", metadata.name, metadata.label);
     /// println!("Fields: {}", metadata.fields.len());
     /// # Ok(())

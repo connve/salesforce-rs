@@ -40,7 +40,7 @@ impl ClientBuilder {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::tooling;
+    /// use salesforce_core::toolingapi;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,7 +57,7 @@ impl ClientBuilder {
     ///     .connect()
     ///     .await?;
     ///
-    /// let tooling_client = tooling::ClientBuilder::new(auth_client).build();
+    /// let tooling_client = toolingapi::ClientBuilder::new(auth_client).build();
     /// # Ok(())
     /// # }
     /// ```
@@ -197,7 +197,7 @@ impl Client {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::tooling::{self, ManagedEventSubscriptionMetadata, ReplayPreset, SubscriptionState};
+    /// use salesforce_core::toolingapi::{self, ManagedEventSubscriptionMetadata, ReplayPreset, SubscriptionState};
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -213,9 +213,9 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let tooling_client = tooling::ClientBuilder::new(auth_client).build();
+    /// let tooling_client = toolingapi::ClientBuilder::new(auth_client).build();
     ///
-    /// let subscription = tooling::CreateManagedEventSubscriptionRequest {
+    /// let subscription = toolingapi::CreateManagedEventSubscriptionRequest {
     ///     full_name: "Managed_Sub_OpportunityChangeEvent".to_string(),
     ///     metadata: ManagedEventSubscriptionMetadata {
     ///         label: "Managed Sub OpportunityChangeEvent".to_string(),

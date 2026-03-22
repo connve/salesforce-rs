@@ -6,6 +6,18 @@
 
 Unofficial Rust SDK for the Salesforce API with support for OAuth2 authentication, Pub/Sub API, Bulk API 2.0, SObject REST API, and Tooling API.
 
+## Features
+
+- **Full OAuth2 Support**: Client credentials flow, username-password flow, automatic token refresh
+- **Pub/Sub API (gRPC)**: Subscribe to platform events and Change Data Capture with managed subscriptions
+- **Bulk API 2.0**: High-performance query and ingest operations for large data sets
+- **REST API**: Complete SObject CRUD operations with field-level control
+- **Tooling API**: Create and manage Change Data Capture subscriptions
+- **Type Safety**: Leverages Rust's type system with generated client code from OpenAPI specs
+- **Error Handling**: Comprehensive error types with proper source chain preservation
+- **Async/Await**: Built on Tokio for efficient concurrent operations
+- **Zero Production Panics**: No unwrap/expect/panic in production code paths
+
 ## Installation
 
 This package is not yet published to crates.io. Install directly from GitHub:
@@ -21,7 +33,7 @@ salesforce_core = { git = "https://github.com/connve-labs/salesforce-rs" }
 
 ```rust
 use salesforce_core::client::{self, Credentials};
-use salesforce_core::sobject;
+use salesforce_core::restapi;
 use serde_json::json;
 
 let auth_client = client::Builder::new()
@@ -30,36 +42,36 @@ let auth_client = client::Builder::new()
     .connect()
     .await?;
 
-let sobject_client = sobject::ClientBuilder::new(auth_client).build();
+let rest_client = restapi::ClientBuilder::new(auth_client).build();
 
 // Create a record
 let data = json!({
     "Name": "Acme Corporation",
     "Industry": "Technology"
 });
-let record_id = sobject_client.create("Account", data).await?;
+let record_id = rest_client.create("Account", data).await?;
 
 // Read a record
-let record = sobject_client.get("Account", &record_id, None).await?;
+let record = rest_client.get("Account", &record_id, None).await?;
 
 // Update a record
 let update_data = json!({ "Industry": "Manufacturing" });
-sobject_client.update("Account", &record_id, update_data).await?;
+rest_client.update("Account", &record_id, update_data).await?;
 
 // Delete a record
-sobject_client.delete("Account", &record_id).await?;
+rest_client.delete("Account", &record_id).await?;
 ```
 
 ### Managed Event Subscriptions
 
 ```rust
-use salesforce_core::tooling::{self, ManagedEventSubscriptionMetadata, ReplayPreset, SubscriptionState};
-use salesforce_core::pubsub::{Client as PubSubClient, ManagedFetchRequest};
+use salesforce_core::toolingapi::{self, ManagedEventSubscriptionMetadata, ReplayPreset, SubscriptionState};
+use salesforce_core::pubsubapi::{Client as PubSubClient, ManagedFetchRequest};
 
 // Step 1: Create managed subscription via Tooling API
-let tooling_client = tooling::ClientBuilder::new(auth_client.clone()).build();
+let tooling_client = toolingapi::ClientBuilder::new(auth_client.clone()).build();
 
-let subscription = tooling::CreateManagedEventSubscriptionRequest {
+let subscription = toolingapi::CreateManagedEventSubscriptionRequest {
     full_name: "Managed_Sub_OpportunityChangeEvent".to_string(),
     metadata: ManagedEventSubscriptionMetadata {
         label: "Managed Sub OpportunityChangeEvent".to_string(),
@@ -73,7 +85,7 @@ let subscription = tooling::CreateManagedEventSubscriptionRequest {
 let response = tooling_client.create_managed_event_subscription(subscription).await?;
 
 // Step 2: Subscribe to events via Pub/Sub API
-let channel = tonic::transport::Channel::from_static(salesforce_core::pubsub::ENDPOINT)
+let channel = tonic::transport::Channel::from_static(salesforce_core::pubsubapi::ENDPOINT)
     .connect()
     .await?;
 
@@ -92,9 +104,18 @@ let stream = pubsub_client.managed_subscribe(request).await?;
 ## Examples
 
 See [examples](examples/) directory for complete working code:
-- [Pub/Sub API](examples/salesforce-core/pubsub.rs)
-- [Bulk API 2.0](examples/salesforce-core/bulkapi.rs)
-- [Managed Event Subscriptions](examples/salesforce-core/managed_subscription.rs) - Create and consume managed subscriptions
+- [REST API](examples/salesforce-core/restapi.rs) - SObject CRUD operations (create, read, update, delete, describe)
+- [Bulk API 2.0](examples/salesforce-core/bulkapi.rs) - Query and ingest operations for large data sets
+- [Tooling API](examples/salesforce-core/toolingapi.rs) - Create managed event subscriptions for Change Data Capture
+- [Pub/Sub API](examples/salesforce-core/pubsubapi.rs) - Subscribe to platform events and CDC events via gRPC
+
+Run examples with:
+```bash
+cargo run --example restapi
+cargo run --example bulkapi
+cargo run --example toolingapi
+cargo run --example pubsubapi
+```
 
 ## Project Structure
 
@@ -103,16 +124,36 @@ salesforce-rs/
 ├── salesforce-core/           # Core SDK
 │   └── src/
 │       ├── client.rs          # OAuth2 authentication
-│       ├── pubsub/            # Pub/Sub API client
+│       ├── http.rs            # Shared HTTP client utilities
+│       ├── pubsubapi/         # Pub/Sub API client
+│       │   ├── mod.rs
+│       │   └── client.rs
 │       ├── bulkapi/           # Bulk API 2.0 client
-│       ├── sobject/           # SObject REST API (CRUD)
-│       ├── tooling/           # Tooling API (metadata operations)
-│       └── http.rs            # Shared HTTP client utilities
-├── generated/                 # Generated API code
-│   ├── salesforce-core/v1/    # Bulk API 2.0 & SObject (OpenAPI)
-│   └── salesforce-pubsub/v1/  # Pub/Sub API (gRPC)
+│       │   ├── mod.rs
+│       │   ├── client.rs
+│       │   ├── query.rs       # Query operations
+│       │   └── ingest.rs      # Ingest operations
+│       ├── restapi/           # REST API
+│       │   ├── mod.rs
+│       │   ├── client.rs      # Shared REST API client
+│       │   └── sobject.rs     # SObject CRUD operations
+│       └── toolingapi/        # Tooling API (metadata operations)
+│           ├── mod.rs
+│           ├── client.rs
+│           ├── types.rs       # Request/response types
+│           └── error.rs       # Error handling
+├── generated/                 # Generated API code (OpenAPI/gRPC)
+│   └── salesforce-core/
+│       ├── bulkapi/           # Bulk API 2.0 (OpenAPI generated)
+│       ├── restapi/           # REST API (OpenAPI generated)
+│       ├── toolingapi/        # Tooling API (OpenAPI generated)
+│       └── pubsubapi/         # Pub/Sub API (gRPC/protobuf generated)
 └── examples/                  # Working examples
     └── salesforce-core/
+        ├── restapi.rs
+        ├── bulkapi.rs
+        ├── toolingapi.rs
+        └── pubsubapi.rs
 ```
 
 ## API Coverage
@@ -184,6 +225,42 @@ salesforce-rs/
 | Get Managed Event Subscription | - |
 | Update Managed Event Subscription | - |
 | Delete Managed Event Subscription | - |
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests (unit + doc tests)
+cargo test --workspace
+
+# Run tests with output
+cargo test --workspace -- --nocapture
+
+# Run specific test
+cargo test test_name
+```
+
+### Running Examples
+
+All examples require environment variables for authentication:
+
+```bash
+export SALESFORCE_CLIENT_ID="your_client_id"
+export SALESFORCE_CLIENT_SECRET="your_client_secret"
+export SALESFORCE_INSTANCE_URL="https://your-instance.salesforce.com"
+export SALESFORCE_TENANT_ID="your_tenant_id"
+
+cargo run --example restapi
+```
+
+### Code Quality Standards
+
+- **No panics in production**: All production code uses `Result` types with `?` operator
+- **Error handling**: Custom error types use `thiserror` with proper source chain preservation
+- **Documentation**: All public APIs have comprehensive documentation with examples
+- **Testing**: 106 tests covering unit tests and doc tests
+- **Dependency management**: All dependencies use workspace-level version management
 
 ## License
 
