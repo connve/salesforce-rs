@@ -2,7 +2,7 @@
 
 use super::Client;
 use crate::client;
-use salesforce_core_restapi::types::SObjectDescribe;
+use salesforce_core_restapi::types::{CreateRecordResponse, SObjectDescribe};
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
 
@@ -50,23 +50,6 @@ pub enum Error {
 }
 
 impl Client {
-    /// Helper to build an HTTP client with authentication headers and connection pooling.
-    async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        crate::http::build_http_client(
-            self.auth_client().as_ref(),
-            self.connect_timeout(),
-            self.request_timeout(),
-        )
-        .await
-        .map_err(|e| match e {
-            crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
-                source: client::Error::LockError,
-            },
-            crate::http::Error::Build { source } => Error::Communication { source },
-        })
-    }
-
     /// Creates a new record of the specified SObject type.
     ///
     /// # Arguments
@@ -76,7 +59,7 @@ impl Client {
     ///
     /// # Returns
     ///
-    /// The Salesforce ID of the created record.
+    /// The full response including the record ID, success status, and any errors.
     ///
     /// # Example
     ///
@@ -99,7 +82,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
     /// let data = json!({
     ///     "Name": "Acme Corporation",
@@ -107,8 +90,8 @@ impl Client {
     ///     "BillingCity": "San Francisco"
     /// });
     ///
-    /// let record_id = rest_client.create("Account", data).await?;
-    /// println!("Created record: {}", record_id);
+    /// let response = rest_client.create("Account", data).await?;
+    /// println!("Created record: {} (success: {})", response.id, response.success);
     /// # Ok(())
     /// # }
     /// ```
@@ -116,9 +99,15 @@ impl Client {
         &self,
         sobject_type: impl AsRef<str>,
         data: Value,
-    ) -> Result<String, Error> {
+    ) -> Result<CreateRecordResponse, Error> {
         let sobject_type = sobject_type.as_ref();
-        let http_client = self.build_http_client().await?;
+        let http_client = self.get_http_client().await.map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })?;
         let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -144,7 +133,7 @@ impl Client {
             .await
             .map_err(|source| Error::SObjectApi { source })?;
 
-        Ok(response.into_inner().id)
+        Ok(response.into_inner())
     }
 
     /// Retrieves a record by its Salesforce ID.
@@ -179,7 +168,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
     /// // Get all fields
     /// let record = rest_client.get("Account", "001xx000003DGb2AAG", None).await?;
@@ -201,7 +190,13 @@ impl Client {
     ) -> Result<Value, Error> {
         let sobject_type = sobject_type.as_ref();
         let record_id = record_id.as_ref();
-        let http_client = self.build_http_client().await?;
+        let http_client = self.get_http_client().await.map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })?;
         let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -246,7 +241,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
     /// let record = rest_client.get_by_external_id(
     ///     "Account",
@@ -267,7 +262,13 @@ impl Client {
         let sobject_type = sobject_type.as_ref();
         let field_name = field_name.as_ref();
         let field_value = field_value.as_ref();
-        let http_client = self.build_http_client().await?;
+        let http_client = self.get_http_client().await.map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })?;
         let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -308,7 +309,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
     /// let data = json!({
     ///     "Name": "Acme Corporation (Updated)",
@@ -327,7 +328,13 @@ impl Client {
     ) -> Result<(), Error> {
         let sobject_type = sobject_type.as_ref();
         let record_id = record_id.as_ref();
-        let http_client = self.build_http_client().await?;
+        let http_client = self.get_http_client().await.map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })?;
         let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -383,7 +390,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
     /// rest_client.delete("Account", "001xx000003DGb2AAG").await?;
     /// # Ok(())
@@ -396,7 +403,13 @@ impl Client {
     ) -> Result<(), Error> {
         let sobject_type = sobject_type.as_ref();
         let record_id = record_id.as_ref();
-        let http_client = self.build_http_client().await?;
+        let http_client = self.get_http_client().await.map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })?;
         let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
@@ -440,7 +453,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
     /// let metadata = rest_client.describe("Account").await?;
     /// println!("SObject: {} ({})", metadata.name, metadata.label);
@@ -450,7 +463,13 @@ impl Client {
     /// ```
     pub async fn describe(&self, sobject_type: impl AsRef<str>) -> Result<SObjectDescribe, Error> {
         let sobject_type = sobject_type.as_ref();
-        let http_client = self.build_http_client().await?;
+        let http_client = self.get_http_client().await.map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })?;
         let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 

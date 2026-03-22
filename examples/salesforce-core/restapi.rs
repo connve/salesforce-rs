@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     // Create REST API client
-    let rest_client = ClientBuilder::new(auth_client).build();
+    let rest_client = ClientBuilder::new(auth_client).build()?;
 
     info!("REST API client initialized successfully");
 
@@ -48,8 +48,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "NumberOfEmployees": 500
     });
 
-    let account_id = rest_client.create("Account", account_data).await?;
-    info!("Created Account with ID: {}", account_id);
+    let create_response = rest_client.create("Account", account_data).await?;
+    info!(
+        "Created Account with ID: {} (success: {})",
+        create_response.id, create_response.success
+    );
+    let account_id = create_response.id;
 
     // Example 2: Read the created record
     info!("\n--- Example 2: Reading Account by ID ---");
@@ -114,8 +118,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Title": "VP of Engineering"
     });
 
-    let contact_id = rest_client.create("Contact", contact_data).await?;
-    info!("Created Contact with ID: {}", contact_id);
+    let create_response = rest_client.create("Contact", contact_data).await?;
+    info!(
+        "Created Contact with ID: {} (success: {})",
+        create_response.id, create_response.success
+    );
+    let contact_id = create_response.id;
 
     // Example 6: Query using external ID (if you have one configured)
     // Uncomment and modify if you have external ID fields configured

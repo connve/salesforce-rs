@@ -10,12 +10,25 @@ use crate::{DEFAULT_API_VERSION, DEFAULT_CONNECT_TIMEOUT_SECS, DEFAULT_REQUEST_T
 ///
 /// This client wraps the authenticated Salesforce client and provides
 /// access to REST API resources including SObject CRUD, queries, and searches.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Client {
     pub(crate) auth_client: Arc<client::Client>,
     pub(crate) api_version: String,
     pub(crate) connect_timeout: Duration,
     pub(crate) request_timeout: Duration,
+}
+
+/// Error type for REST API client builder.
+#[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
+pub enum Error {
+    /// Failed to build HTTP client.
+    #[error("Failed to build HTTP client.")]
+    HttpClient {
+        /// The underlying reqwest error.
+        #[source]
+        source: reqwest::Error,
+    },
 }
 
 /// Builder for creating a REST API client.
@@ -54,7 +67,7 @@ impl ClientBuilder {
     ///     .connect()
     ///     .await?;
     ///
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build();
+    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -103,9 +116,13 @@ impl ClientBuilder {
         self
     }
 
-    /// Builds the SObject API client.
-    pub fn build(self) -> Client {
-        Client {
+    /// Builds the REST API client.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client cannot be built.
+    pub fn build(self) -> Result<Client, Error> {
+        Ok(Client {
             auth_client: Arc::new(self.auth_client),
             api_version: self
                 .api_version
@@ -116,7 +133,7 @@ impl ClientBuilder {
             request_timeout: self
                 .request_timeout
                 .unwrap_or_else(|| Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS)),
-        }
+        })
     }
 }
 
@@ -129,16 +146,6 @@ impl Client {
     /// Returns the configured API version.
     pub fn api_version(&self) -> &str {
         &self.api_version
-    }
-
-    /// Returns the configured connection timeout.
-    pub fn connect_timeout(&self) -> Duration {
-        self.connect_timeout
-    }
-
-    /// Returns the configured request timeout.
-    pub fn request_timeout(&self) -> Duration {
-        self.request_timeout
     }
 
     /// Returns the base URL for API requests.
@@ -156,5 +163,45 @@ impl Client {
             "{}/services/data/v{}",
             instance_url, self.api_version
         ))
+    }
+
+    /// Returns the connection timeout for HTTP requests.
+    pub(crate) fn connect_timeout(&self) -> Duration {
+        self.connect_timeout
+    }
+
+    /// Returns the request timeout for HTTP requests.
+    pub(crate) fn request_timeout(&self) -> Duration {
+        self.request_timeout
+    }
+
+    /// Gets an HTTP client with authentication headers for API requests.
+    ///
+    /// This creates a new reqwest::Client with the current access token in the Authorization header.
+    pub(crate) async fn get_http_client(&self) -> Result<reqwest::Client, crate::http::Error> {
+        crate::http::get_http_client(
+            self.auth_client.as_ref(),
+            self.connect_timeout(),
+            self.request_timeout(),
+        )
+        .await
+    }
+
+    /// Access SObject CRUD operations.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the client itself, which implements all SObject operations.
+    pub fn sobject(&self) -> &Self {
+        self
+    }
+
+    /// Access Composite API operations for bulk record operations.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the client itself, which implements all Composite operations.
+    pub fn composite(&self) -> &Self {
+        self
     }
 }

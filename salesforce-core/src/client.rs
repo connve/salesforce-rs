@@ -403,7 +403,7 @@ impl Client {
     /// Returns an error if:
     /// - Credentials file cannot be read ([`Error::ReadCredentials`])
     /// - Credentials JSON is invalid ([`Error::ParseCredentials`])
-    /// - Required fields are missing for the auth flow ([`Error::InvalidCredentials`])
+    /// - Required fields are missing for the auth flow ([`Error::MissingClientSecret`], [`Error::MissingUsername`], [`Error::MissingPassword`])
     /// - Instance URL is malformed ([`Error::ParseUrl`])
     /// - OAuth2 token exchange fails ([`Error::TokenExchange`])
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]

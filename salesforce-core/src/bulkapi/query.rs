@@ -22,7 +22,7 @@ impl QueryClient {
 
     /// Helper to build an HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        crate::http::build_http_client(
+        crate::http::get_http_client(
             self.bulk_client.auth_client(),
             self.bulk_client.connect_timeout(),
             self.bulk_client.request_timeout(),
@@ -67,7 +67,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let job = query_client
@@ -129,7 +129,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let job_info = query_client.get_job("750xx0000000001AAA").await?;
@@ -188,7 +188,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let mut results = query_client
@@ -251,7 +251,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// query_client.delete_job("750xx0000000001AAA").await?;
@@ -306,7 +306,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let job_info = query_client.abort_job("750xx0000000001AAA").await?;
@@ -371,7 +371,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let jobs = query_client.get_all_jobs(None, None, None, None).await?;
@@ -444,7 +444,7 @@ impl QueryClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
     /// let result_pages = query_client.get_result_pages("750R0000000zxr8IAA", None).await?;

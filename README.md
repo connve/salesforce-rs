@@ -49,7 +49,8 @@ let data = json!({
     "Name": "Acme Corporation",
     "Industry": "Technology"
 });
-let record_id = rest_client.create("Account", data).await?;
+let response = rest_client.create("Account", data).await?;
+let record_id = response.id;
 
 // Read a record
 let record = rest_client.get("Account", &record_id, None).await?;

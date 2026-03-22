@@ -50,7 +50,7 @@ pub enum Error {
 ///
 /// Returns an error if token retrieval fails, header construction fails,
 /// or the HTTP client cannot be built.
-pub async fn build_http_client(
+pub async fn get_http_client(
     auth_client: &client::Client,
     connect_timeout: Duration,
     request_timeout: Duration,

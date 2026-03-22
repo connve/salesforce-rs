@@ -27,7 +27,7 @@
 //!     .connect()
 //!     .await?;
 //!
-//! let tooling_client = toolingapi::ClientBuilder::new(auth_client).build();
+//! let tooling_client = toolingapi::ClientBuilder::new(auth_client).build()?;
 //!
 //! // Create a managed event subscription
 //! let subscription = toolingapi::CreateManagedEventSubscriptionRequest {

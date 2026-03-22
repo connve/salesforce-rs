@@ -53,7 +53,7 @@
 //! #     .build()?
 //! #     .connect()
 //! #     .await?;
-//! let rest_client = ClientBuilder::new(auth_client).build();
+//! let rest_client = ClientBuilder::new(auth_client).build()?;
 //!
 //! // Create a record
 //! let data = json!({
@@ -85,7 +85,7 @@
 //! #     .build()?
 //! #     .connect()
 //! #     .await?;
-//! let bulk_client = ClientBuilder::new(auth_client).build();
+//! let bulk_client = ClientBuilder::new(auth_client).build()?;
 //!
 //! // Create a query job
 //! let job = bulk_client
@@ -125,7 +125,7 @@
 //! #     .build()?
 //! #     .connect()
 //! #     .await?;
-//! let tooling_client = ClientBuilder::new(auth_client).build();
+//! let tooling_client = ClientBuilder::new(auth_client).build()?;
 //!
 //! // Create managed event subscription
 //! let subscription = CreateManagedEventSubscriptionRequest {

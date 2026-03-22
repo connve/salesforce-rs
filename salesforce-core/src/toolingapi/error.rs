@@ -39,6 +39,12 @@ pub enum Error {
     /// This error occurs when the auth client was not connected before use.
     #[error("Instance URL not available: call connect() on the auth client first")]
     MissingInstanceUrl,
+
+    /// Failed to build the client.
+    ///
+    /// This variant is reserved for future validation errors.
+    #[error("Failed to build Tooling API client")]
+    Build,
 }
 
 #[cfg(test)]

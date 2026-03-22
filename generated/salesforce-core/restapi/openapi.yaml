@@ -228,6 +228,250 @@ components:
           items:
             type: object
 
+    # Composite API Schemas
+    CompositeRecordRequest:
+      type: object
+      required:
+        - attributes
+      properties:
+        attributes:
+          type: object
+          required:
+            - type
+          properties:
+            type:
+              type: string
+              description: SObject type name
+            referenceId:
+              type: string
+              description: Reference ID for this record (used in tree requests)
+      additionalProperties: true
+      description: Record data with attributes and field values
+
+    CompositeRecordResult:
+      type: object
+      required:
+        - id
+        - success
+      properties:
+        id:
+          type: string
+          description: Salesforce ID of the record (null if failed)
+          nullable: true
+        success:
+          type: boolean
+          description: Whether the operation succeeded
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    CompositeCollectionCreateRequest:
+      type: object
+      required:
+        - allOrNone
+        - records
+      properties:
+        allOrNone:
+          type: boolean
+          description: If true, rolls back entire request if any record fails
+          default: false
+        records:
+          type: array
+          description: Array of records to create (max 200)
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/CompositeRecordRequest'
+
+    CompositeCollectionCreateResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CompositeRecordResult'
+
+    CompositeCollectionRetrieveRequest:
+      type: object
+      required:
+        - ids
+      properties:
+        ids:
+          type: array
+          description: Array of record IDs to retrieve (max 2000)
+          minItems: 1
+          maxItems: 2000
+          items:
+            type: string
+        fields:
+          type: array
+          description: Fields to retrieve for each record
+          items:
+            type: string
+
+    CompositeCollectionUpdateRequest:
+      type: object
+      required:
+        - allOrNone
+        - records
+      properties:
+        allOrNone:
+          type: boolean
+          description: If true, rolls back entire request if any record fails
+          default: false
+        records:
+          type: array
+          description: Array of records to update (max 200)
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required:
+              - attributes
+              - id
+            properties:
+              attributes:
+                type: object
+                required:
+                  - type
+                properties:
+                  type:
+                    type: string
+                    description: SObject type name
+              id:
+                type: string
+                description: Salesforce ID of the record to update
+            additionalProperties: true
+
+    CompositeCollectionUpdateResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CompositeRecordResult'
+
+    CompositeCollectionUpsertRequest:
+      type: object
+      required:
+        - allOrNone
+        - records
+      properties:
+        allOrNone:
+          type: boolean
+          description: If true, rolls back entire request if any record fails
+          default: false
+        records:
+          type: array
+          description: Array of records to upsert (max 200)
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required:
+              - attributes
+            properties:
+              attributes:
+                type: object
+                required:
+                  - type
+                properties:
+                  type:
+                    type: string
+                    description: SObject type name
+            additionalProperties: true
+
+    CompositeCollectionUpsertResponse:
+      type: array
+      items:
+        type: object
+        required:
+          - id
+          - success
+          - created
+        properties:
+          id:
+            type: string
+            description: Salesforce ID of the record
+            nullable: true
+          success:
+            type: boolean
+            description: Whether the operation succeeded
+          created:
+            type: boolean
+            description: Whether a new record was created (true) or existing updated (false)
+          errors:
+            type: array
+            description: List of errors (empty on success)
+            items:
+              $ref: '#/components/schemas/Error'
+
+    CompositeCollectionDeleteResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/CompositeRecordResult'
+
+    CompositeTreeRecord:
+      type: object
+      required:
+        - attributes
+      properties:
+        attributes:
+          type: object
+          required:
+            - type
+            - referenceId
+          properties:
+            type:
+              type: string
+              description: SObject type name
+            referenceId:
+              type: string
+              description: Unique reference ID for this record
+      additionalProperties: true
+      description: Record with nested child relationships
+
+    CompositeTreeRequest:
+      type: object
+      required:
+        - records
+      properties:
+        records:
+          type: array
+          description: Array of record trees to create (max 200 total records)
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CompositeTreeRecord'
+
+    CompositeTreeResult:
+      type: object
+      required:
+        - referenceId
+        - id
+      properties:
+        referenceId:
+          type: string
+          description: Reference ID from the request
+        id:
+          type: string
+          description: Salesforce ID of the created record
+        errors:
+          type: array
+          description: List of errors (empty on success)
+          items:
+            $ref: '#/components/schemas/Error'
+
+    CompositeTreeResponse:
+      type: object
+      required:
+        - hasErrors
+        - results
+      properties:
+        hasErrors:
+          type: boolean
+          description: Whether any records failed to create
+        results:
+          type: array
+          description: Results for each record in the tree
+          items:
+            $ref: '#/components/schemas/CompositeTreeResult'
+
 paths:
   /sobjects/{sObjectType}:
     post:
@@ -547,6 +791,313 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /composite/sobjects:
+    post:
+      summary: Create Multiple Records
+      description: |
+        Creates up to 200 records in a single request. Records can be of different SObject types.
+      operationId: createRecords
+      tags:
+        - Composite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeCollectionCreateRequest'
+            example:
+              allOrNone: false
+              records:
+                - attributes:
+                    type: "Account"
+                  Name: "Acme Corp"
+                  Industry: "Technology"
+                - attributes:
+                    type: "Contact"
+                  FirstName: "John"
+                  LastName: "Doe"
+      responses:
+        '200':
+          description: Records creation attempted (check individual results for success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionCreateResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: Update Multiple Records
+      description: |
+        Updates up to 200 records in a single request. Records can be of different SObject types.
+      operationId: updateRecords
+      tags:
+        - Composite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeCollectionUpdateRequest'
+            example:
+              allOrNone: false
+              records:
+                - attributes:
+                    type: "Account"
+                  id: "001xx000003DGb2AAG"
+                  Industry: "Manufacturing"
+                - attributes:
+                    type: "Contact"
+                  id: "003xx000004TmiQAAS"
+                  Title: "VP of Engineering"
+      responses:
+        '200':
+          description: Records update attempted (check individual results for success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionUpdateResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete Multiple Records
+      description: |
+        Deletes up to 200 records in a single request. All records must be of the same SObject type.
+      operationId: deleteRecords
+      tags:
+        - Composite
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: Comma-separated list of record IDs to delete (max 200)
+          schema:
+            type: string
+          example: "001xx000003DGb2AAG,001xx000003DGb3AAG"
+        - name: allOrNone
+          in: query
+          required: false
+          description: If true, rolls back entire request if any record fails
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Records deletion attempted (check individual results for success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionDeleteResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /composite/sobjects/{sObjectType}:
+    post:
+      summary: Retrieve Multiple Records
+      description: |
+        Retrieves up to 2000 records by ID in a single request. All records must be of the same SObject type.
+      operationId: getRecords
+      tags:
+        - Composite
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeCollectionRetrieveRequest'
+            example:
+              ids:
+                - "001xx000003DGb2AAG"
+                - "001xx000003DGb3AAG"
+              fields:
+                - "Id"
+                - "Name"
+                - "Industry"
+      responses:
+        '200':
+          description: Records retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /composite/sobjects/{sObjectType}/{externalIdField}:
+    patch:
+      summary: Upsert Multiple Records
+      description: |
+        Creates or updates up to 200 records in a single request based on an external ID field.
+        All records must be of the same SObject type.
+      operationId: upsertRecords
+      tags:
+        - Composite
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: externalIdField
+          in: path
+          required: true
+          description: The API name of the external ID field
+          schema:
+            type: string
+          example: "ExternalId__c"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeCollectionUpsertRequest'
+            example:
+              allOrNone: false
+              records:
+                - attributes:
+                    type: "Account"
+                  ExternalId__c: "EXT-001"
+                  Name: "Acme Corp"
+                - attributes:
+                    type: "Account"
+                  ExternalId__c: "EXT-002"
+                  Name: "Global Industries"
+      responses:
+        '200':
+          description: Records upsert attempted (check individual results for success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionUpsertResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /composite/tree/{sObjectType}:
+    post:
+      summary: Create Record Tree
+      description: |
+        Creates up to 200 records with parent-child relationships in a single request.
+        Records are created in order to satisfy foreign key relationships.
+      operationId: createRecordTree
+      tags:
+        - Composite
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the parent SObject type
+          schema:
+            type: string
+          example: "Account"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompositeTreeRequest'
+            example:
+              records:
+                - attributes:
+                    type: "Account"
+                    referenceId: "ref1"
+                  Name: "Acme Corp"
+                  Contacts:
+                    records:
+                      - attributes:
+                          type: "Contact"
+                          referenceId: "ref2"
+                        FirstName: "John"
+                        LastName: "Doe"
+                      - attributes:
+                          type: "Contact"
+                          referenceId: "ref3"
+                        FirstName: "Jane"
+                        LastName: "Smith"
+      responses:
+        '200':
+          description: Record tree creation attempted (check hasErrors and individual results)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeTreeResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 tags:
   - name: SObject
     description: SObject REST API operations for CRUD operations on individual records
+  - name: Composite
+    description: Composite API for bulk operations on multiple records

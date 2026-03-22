@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     // Create Tooling API client with default API version (v65.0)
-    let tooling_client = ClientBuilder::new(auth_client.clone()).build();
+    let tooling_client = ClientBuilder::new(auth_client.clone()).build()?;
 
     info!("Tooling API client initialized successfully");
 
@@ -100,7 +100,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Err(e) => {
-            info!("Failed to create OpportunityChangeEvent subscription: {}", e);
+            info!(
+                "Failed to create OpportunityChangeEvent subscription: {}",
+                e
+            );
             info!("This may be expected if the subscription already exists.");
         }
     }

@@ -263,7 +263,8 @@ impl Client {
     pub async fn publish(
         &mut self,
         request: salesforce_core_pubsubapi::eventbus::v1::PublishRequest,
-    ) -> Result<tonic::Response<salesforce_core_pubsubapi::eventbus::v1::PublishResponse>, Error> {
+    ) -> Result<tonic::Response<salesforce_core_pubsubapi::eventbus::v1::PublishResponse>, Error>
+    {
         self.pubsub
             .publish(tonic::Request::new(request))
             .await
@@ -279,7 +280,9 @@ impl Client {
         &mut self,
         request: salesforce_core_pubsubapi::eventbus::v1::FetchRequest,
     ) -> Result<
-        tonic::Response<tonic::codec::Streaming<salesforce_core_pubsubapi::eventbus::v1::FetchResponse>>,
+        tonic::Response<
+            tonic::codec::Streaming<salesforce_core_pubsubapi::eventbus::v1::FetchResponse>,
+        >,
         Error,
     > {
         self.pubsub

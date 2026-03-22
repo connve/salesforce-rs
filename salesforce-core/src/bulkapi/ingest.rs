@@ -22,7 +22,7 @@ impl IngestClient {
 
     /// Helper to build an HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        crate::http::build_http_client(
+        crate::http::get_http_client(
             self.bulk_client.auth_client(),
             self.bulk_client.connect_timeout(),
             self.bulk_client.request_timeout(),
@@ -70,7 +70,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job = ingest_client
@@ -139,7 +139,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.get_job("750xx0000000002AAA").await?;
@@ -194,7 +194,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let csv_data = b"Name,Phone\nAcme Inc,555-1234\nGlobal Corp,555-5678";
@@ -249,7 +249,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.mark_upload_complete("750xx0000000002AAA").await?;
@@ -312,7 +312,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let job_info = ingest_client.abort_job("750xx0000000002AAA").await?;
@@ -371,7 +371,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// ingest_client.delete_job("750xx0000000002AAA").await?;
@@ -426,7 +426,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_successful_results("750xx0000000002AAA").await?;
@@ -488,7 +488,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_failed_results("750xx0000000002AAA").await?;
@@ -550,7 +550,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let mut results = ingest_client.get_unprocessed_results("750xx0000000002AAA").await?;
@@ -613,7 +613,7 @@ impl IngestClient {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let bulk_client = ClientBuilder::new(auth_client).build();
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let ingest_client = bulk_client.ingest();
     ///
     /// let jobs = ingest_client.get_all_jobs(None, None, None).await?;

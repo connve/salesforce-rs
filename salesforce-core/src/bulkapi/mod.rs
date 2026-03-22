@@ -27,12 +27,12 @@
 //!     .await?;
 //!
 //! // Create Bulk API client with default API version (v65.0)
-//! let bulk_client = ClientBuilder::new(auth_client.clone()).build();
+//! let bulk_client = ClientBuilder::new(auth_client.clone()).build()?;
 //!
 //! // Or specify a custom API version
 //! let bulk_client_custom = ClientBuilder::new(auth_client)
 //!     .api_version("64.0")
-//!     .build();
+//!     .build()?;
 //!
 //! // Use query and ingest operations
 //! let query_client = bulk_client.query();
@@ -45,7 +45,7 @@ mod client;
 pub mod ingest;
 pub mod query;
 
-pub use client::{Client, ClientBuilder};
+pub use client::{Client, ClientBuilder, Error as ClientError};
 
 /// Re-export error types from query and ingest modules.
 pub use ingest::Error as IngestError;
@@ -69,8 +69,8 @@ pub use salesforce_core_bulkapi::types::{
     LineEnding,
     QueryJobInfo,
     QueryJobList,
-    QueryResultPages,
     QueryOperation,
+    QueryResultPages,
 };
 
 /// Re-export ByteStream for handling streaming results.

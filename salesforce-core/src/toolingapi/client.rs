@@ -57,7 +57,7 @@ impl ClientBuilder {
     ///     .connect()
     ///     .await?;
     ///
-    /// let tooling_client = toolingapi::ClientBuilder::new(auth_client).build();
+    /// let tooling_client = toolingapi::ClientBuilder::new(auth_client).build()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -107,8 +107,13 @@ impl ClientBuilder {
     }
 
     /// Builds the Tooling API client.
-    pub fn build(self) -> Client {
-        Client {
+    ///
+    /// # Errors
+    ///
+    /// Currently this method is infallible and always returns `Ok`, but returns
+    /// a `Result` for future compatibility if validation is added.
+    pub fn build(self) -> Result<Client, Error> {
+        Ok(Client {
             auth_client: Arc::new(self.auth_client),
             api_version: self
                 .api_version
@@ -119,7 +124,7 @@ impl ClientBuilder {
             request_timeout: self
                 .request_timeout
                 .unwrap_or_else(|| Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS)),
-        }
+        })
     }
 }
 
@@ -163,7 +168,7 @@ impl Client {
 
     /// Helper to build an HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        crate::http::build_http_client(
+        crate::http::get_http_client(
             self.auth_client().as_ref(),
             self.connect_timeout(),
             self.request_timeout(),
@@ -213,7 +218,7 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let tooling_client = toolingapi::ClientBuilder::new(auth_client).build();
+    /// let tooling_client = toolingapi::ClientBuilder::new(auth_client).build()?;
     ///
     /// let subscription = toolingapi::CreateManagedEventSubscriptionRequest {
     ///     full_name: "Managed_Sub_OpportunityChangeEvent".to_string(),

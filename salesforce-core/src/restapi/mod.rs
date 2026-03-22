@@ -28,14 +28,15 @@
 //!     .connect()
 //!     .await?;
 //!
-//! let rest_client = restapi::ClientBuilder::new(auth_client).build();
+//! let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
 //!
 //! // Create a record
 //! let data = json!({
 //!     "Name": "Acme Corporation",
 //!     "Industry": "Technology"
 //! });
-//! let record_id = rest_client.create("Account", data).await?;
+//! let response = rest_client.create("Account", data).await?;
+//! let record_id = response.id;
 //! # Ok(())
 //! # }
 //! ```
@@ -46,4 +47,22 @@ mod client;
 /// SObject CRUD operations for individual records.
 pub mod sobject;
 
-pub use client::{Client, ClientBuilder};
+/// Composite API operations for bulk record operations.
+pub mod composite;
+
+pub use client::{Client, ClientBuilder, Error as ClientError};
+
+// SObject types
+pub use salesforce_core_restapi::types::{CreateRecordResponse, SObjectDescribe, SObjectField};
+pub use sobject::Error as SObjectError;
+
+// Composite types
+pub use composite::Error as CompositeError;
+pub use salesforce_core_restapi::types::{
+    CompositeCollectionCreateRequest, CompositeCollectionCreateResponse,
+    CompositeCollectionDeleteResponse, CompositeCollectionRetrieveRequest,
+    CompositeCollectionUpdateRequest, CompositeCollectionUpdateResponse,
+    CompositeCollectionUpsertRequest, CompositeCollectionUpsertResponse, CompositeRecordRequest,
+    CompositeRecordResult, CompositeTreeRecord, CompositeTreeRequest, CompositeTreeResponse,
+    CompositeTreeResult,
+};
