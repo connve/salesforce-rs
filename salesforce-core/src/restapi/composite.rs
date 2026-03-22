@@ -92,20 +92,31 @@ impl Client {
     /// #     .await?;
     /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
+    /// use salesforce_core_restapi::types::{CompositeRecordRequest, CompositeRecordRequestAttributes};
+    ///
+    /// let mut account_record = CompositeRecordRequest {
+    ///     attributes: CompositeRecordRequestAttributes {
+    ///         type_: "Account".to_string(),
+    ///         reference_id: None,
+    ///     },
+    ///     extra: serde_json::Map::new(),
+    /// };
+    /// account_record.extra.insert("Name".to_string(), json!("Acme Corp"));
+    /// account_record.extra.insert("Industry".to_string(), json!("Technology"));
+    ///
+    /// let mut contact_record = CompositeRecordRequest {
+    ///     attributes: CompositeRecordRequestAttributes {
+    ///         type_: "Contact".to_string(),
+    ///         reference_id: None,
+    ///     },
+    ///     extra: serde_json::Map::new(),
+    /// };
+    /// contact_record.extra.insert("FirstName".to_string(), json!("John"));
+    /// contact_record.extra.insert("LastName".to_string(), json!("Doe"));
+    ///
     /// let request = CompositeCollectionCreateRequest {
     ///     all_or_none: false,
-    ///     records: vec![
-    ///         serde_json::from_value(json!({
-    ///             "attributes": { "type": "Account" },
-    ///             "Name": "Acme Corp",
-    ///             "Industry": "Technology"
-    ///         }))?,
-    ///         serde_json::from_value(json!({
-    ///             "attributes": { "type": "Contact" },
-    ///             "FirstName": "John",
-    ///             "LastName": "Doe"
-    ///         }))?,
-    ///     ],
+    ///     records: vec![account_record, contact_record],
     /// };
     ///
     /// let results = rest_client.composite().create_records(&request).await?;
@@ -244,15 +255,23 @@ impl Client {
     /// #     .await?;
     /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
+    /// use salesforce_core_restapi::types::{
+    ///     CompositeCollectionUpdateRequestRecordsItem,
+    ///     CompositeCollectionUpdateRequestRecordsItemAttributes,
+    /// };
+    ///
+    /// let mut update_record = CompositeCollectionUpdateRequestRecordsItem {
+    ///     attributes: CompositeCollectionUpdateRequestRecordsItemAttributes {
+    ///         type_: "Account".to_string(),
+    ///     },
+    ///     id: "001xx000003DGb2AAG".to_string(),
+    ///     extra: serde_json::Map::new(),
+    /// };
+    /// update_record.extra.insert("Industry".to_string(), json!("Manufacturing"));
+    ///
     /// let request = CompositeCollectionUpdateRequest {
     ///     all_or_none: false,
-    ///     records: vec![
-    ///         serde_json::from_value(json!({
-    ///             "attributes": { "type": "Account" },
-    ///             "id": "001xx000003DGb2AAG",
-    ///             "Industry": "Manufacturing"
-    ///         }))?,
-    ///     ],
+    ///     records: vec![update_record],
     /// };
     ///
     /// let results = rest_client.composite().update_records(&request).await?;
@@ -317,15 +336,23 @@ impl Client {
     /// #     .await?;
     /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
+    /// use salesforce_core_restapi::types::{
+    ///     CompositeCollectionUpsertRequestRecordsItem,
+    ///     CompositeCollectionUpsertRequestRecordsItemAttributes,
+    /// };
+    ///
+    /// let mut upsert_record = CompositeCollectionUpsertRequestRecordsItem {
+    ///     attributes: CompositeCollectionUpsertRequestRecordsItemAttributes {
+    ///         type_: "Account".to_string(),
+    ///     },
+    ///     extra: serde_json::Map::new(),
+    /// };
+    /// upsert_record.extra.insert("ExternalId__c".to_string(), json!("EXT-001"));
+    /// upsert_record.extra.insert("Name".to_string(), json!("Acme Corp"));
+    ///
     /// let request = CompositeCollectionUpsertRequest {
     ///     all_or_none: false,
-    ///     records: vec![
-    ///         serde_json::from_value(json!({
-    ///             "attributes": { "type": "Account" },
-    ///             "ExternalId__c": "EXT-001",
-    ///             "Name": "Acme Corp"
-    ///         }))?,
-    ///     ],
+    ///     records: vec![upsert_record],
     /// };
     ///
     /// let results = rest_client
@@ -467,28 +494,31 @@ impl Client {
     /// #     .await?;
     /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
     ///
-    /// let request = CompositeTreeRequest {
-    ///     records: vec![
-    ///         serde_json::from_value(json!({
+    /// use salesforce_core_restapi::types::{CompositeTreeRecord, CompositeTreeRecordAttributes};
+    ///
+    /// let mut account_tree = CompositeTreeRecord {
+    ///     attributes: CompositeTreeRecordAttributes {
+    ///         type_: "Account".to_string(),
+    ///         reference_id: "ref1".to_string(),
+    ///     },
+    ///     extra: serde_json::Map::new(),
+    /// };
+    /// account_tree.extra.insert("Name".to_string(), json!("Acme Corp"));
+    /// account_tree.extra.insert("Contacts".to_string(), json!({
+    ///     "records": [
+    ///         {
     ///             "attributes": {
-    ///                 "type": "Account",
-    ///                 "referenceId": "ref1"
+    ///                 "type": "Contact",
+    ///                 "referenceId": "ref2"
     ///             },
-    ///             "Name": "Acme Corp",
-    ///             "Contacts": {
-    ///                 "records": [
-    ///                     {
-    ///                         "attributes": {
-    ///                             "type": "Contact",
-    ///                             "referenceId": "ref2"
-    ///                         },
-    ///                         "FirstName": "John",
-    ///                         "LastName": "Doe"
-    ///                     }
-    ///                 ]
-    ///             }
-    ///         }))?,
-    ///     ],
+    ///             "FirstName": "John",
+    ///             "LastName": "Doe"
+    ///         }
+    ///     ]
+    /// }));
+    ///
+    /// let request = CompositeTreeRequest {
+    ///     records: vec![account_tree],
     /// };
     ///
     /// let response = rest_client.composite().create_record_tree("Account", &request).await?;
