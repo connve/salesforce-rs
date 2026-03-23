@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 authors = ["CONNVE"]
 license = "MPL-2.0"
 edition = "2021"
@@ -30,11 +30,7 @@ tonic-prost = "0.14"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 oauth2 = "5.0"
-reqwest = { version = "0.13", default-features = false, features = [
-    "rustls",
-    "json",
-    "form",
-] }
+reqwest = { version = "0.13", features = ["json", "form"] }
 thiserror = "2.0"
 url = "2.5"
 bytes = "1.11"
