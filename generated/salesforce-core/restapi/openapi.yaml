@@ -36,15 +36,20 @@ components:
     Error:
       type: object
       required:
-        - errorCode
+        - statusCode
         - message
       properties:
-        errorCode:
+        statusCode:
           type: string
-          description: Error code identifier
+          description: Error status code identifier
         message:
           type: string
           description: Descriptive error message
+        fields:
+          type: array
+          description: Fields that caused the error
+          items:
+            type: string
 
     ErrorResponse:
       type: array
