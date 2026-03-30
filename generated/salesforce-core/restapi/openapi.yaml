@@ -36,12 +36,14 @@ components:
     Error:
       type: object
       required:
-        - statusCode
         - message
       properties:
         statusCode:
           type: string
-          description: Error status code identifier
+          description: Error status code identifier (optional, not always present)
+        errorCode:
+          type: string
+          description: Error code identifier (alternative to statusCode)
         message:
           type: string
           description: Descriptive error message
