@@ -23,7 +23,7 @@ use serde_json::Value;
 #[non_exhaustive]
 pub enum Error {
     /// Authentication error.
-    #[error("authentication error")]
+    #[error("Authentication error: {source}")]
     Auth {
         /// The underlying authentication error.
         #[source]
@@ -31,7 +31,7 @@ pub enum Error {
     },
 
     /// Error from the Salesforce Composite API.
-    #[error("Salesforce Composite API error")]
+    #[error("Salesforce Composite API error: {source}")]
     CompositeApi {
         /// The underlying API error.
         #[source]
@@ -39,7 +39,7 @@ pub enum Error {
     },
 
     /// Error serializing request data.
-    #[error("failed to serialize request")]
+    #[error("Failed to serialize request: {source}")]
     Serde {
         /// The underlying serde error.
         #[source]
@@ -47,7 +47,7 @@ pub enum Error {
     },
 
     /// Error building HTTP client.
-    #[error("failed to build HTTP client")]
+    #[error("Failed to build HTTP client: {source}")]
     HttpClient {
         /// The underlying HTTP client error.
         #[source]
