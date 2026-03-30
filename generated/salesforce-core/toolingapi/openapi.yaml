@@ -86,13 +86,16 @@ components:
     ToolingApiError:
       type: object
       required:
-        - statusCode
         - message
       properties:
         statusCode:
           type: string
-          description: Error code identifier
+          description: Error status code identifier (optional, not always present)
           example: "INVALID_FIELD"
+        errorCode:
+          type: string
+          description: Error code identifier (alternative to statusCode)
+          example: "EXCEEDED_ID_LIMIT"
         message:
           type: string
           description: Descriptive error message

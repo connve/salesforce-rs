@@ -106,12 +106,14 @@ components:
     Error:
       type: object
       required:
-        - errorCode
         - message
       properties:
         errorCode:
           type: string
-          description: Error code identifier
+          description: Error code identifier (optional, not always present)
+        statusCode:
+          type: string
+          description: Error status code identifier (alternative to errorCode)
         message:
           type: string
           description: Descriptive error message
