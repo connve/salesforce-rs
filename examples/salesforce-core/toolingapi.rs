@@ -9,29 +9,22 @@
 //! After creation, you can use it with the Pub/Sub API's managed_subscribe()
 //! method as shown in the pubsubapi.rs example.
 
-use salesforce_core::client::{self, Credentials};
+use salesforce_core::client;
 use salesforce_core::toolingapi::{
     ClientBuilder, CreateManagedEventSubscriptionRequest, ManagedEventSubscriptionMetadata,
     ReplayPreset, SubscriptionState,
 };
 use std::env;
+use std::path::PathBuf;
 use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing subscriber for logging
     tracing_subscriber::fmt::init();
 
-    // Initialize the Salesforce authentication client
+    let credentials_path = PathBuf::from(env::var("SFDC_CREDENTIALS")?);
     let auth_client = client::Builder::new()
-        .credentials(Credentials {
-            client_id: env::var("SALESFORCE_CLIENT_ID")?,
-            client_secret: Some(env::var("SALESFORCE_CLIENT_SECRET")?),
-            username: None,
-            password: None,
-            instance_url: env::var("SALESFORCE_INSTANCE_URL")?,
-            tenant_id: env::var("SALESFORCE_TENANT_ID")?,
-        })
+        .credentials_path(credentials_path)
         .build()?
         .connect()
         .await?;

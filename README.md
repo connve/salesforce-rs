@@ -32,17 +32,18 @@ salesforce_core = { git = "https://github.com/connve-labs/salesforce-rs" }
 ### SObject CRUD Operations
 
 ```rust
-use salesforce_core::client::{self, Credentials};
+use salesforce_core::client;
 use salesforce_core::restapi;
 use serde_json::json;
+use std::path::PathBuf;
 
 let auth_client = client::Builder::new()
-    .credentials(Credentials { /* ... */ })
+    .credentials_path(PathBuf::from(std::env::var("SFDC_CREDENTIALS")?))
     .build()?
     .connect()
     .await?;
 
-let rest_client = restapi::ClientBuilder::new(auth_client).build();
+let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
 
 // Create a record
 let data = json!({
@@ -70,7 +71,7 @@ use salesforce_core::toolingapi::{self, ManagedEventSubscriptionMetadata, Replay
 use salesforce_core::pubsubapi::{Client as PubSubClient, ManagedFetchRequest};
 
 // Step 1: Create managed subscription via Tooling API
-let tooling_client = toolingapi::ClientBuilder::new(auth_client.clone()).build();
+let tooling_client = toolingapi::ClientBuilder::new(auth_client.clone()).build()?;
 
 let subscription = toolingapi::CreateManagedEventSubscriptionRequest {
     full_name: "Managed_Sub_OpportunityChangeEvent".to_string(),
@@ -216,7 +217,25 @@ salesforce-rs/
 | Get Record by External ID | ✓ |
 | Update Record | ✓ |
 | Delete Record | ✓ |
+| Get SObject Basic Info | ✓ |
 | Describe SObject | ✓ |
+
+### Composite REST API
+
+| Operation | Status |
+|-----------|--------|
+| Create Records (batch) | ✓ |
+| Update Records (batch) | ✓ |
+| Delete Records (batch) | ✓ |
+| Retrieve Records (batch) | ✓ |
+| Upsert Records (batch) | ✓ |
+| Create Record Tree | ✓ |
+
+### Search
+
+| Operation | Status |
+|-----------|--------|
+| SOSL Search | ✓ |
 
 ### Tooling API
 
@@ -244,15 +263,29 @@ cargo test test_name
 
 ### Running Examples
 
-All examples require environment variables for authentication:
+All examples load credentials from a JSON file pointed to by `SFDC_CREDENTIALS`:
 
 ```bash
-export SALESFORCE_CLIENT_ID="your_client_id"
-export SALESFORCE_CLIENT_SECRET="your_client_secret"
-export SALESFORCE_INSTANCE_URL="https://your-instance.salesforce.com"
-export SALESFORCE_TENANT_ID="your_tenant_id"
+cat > credentials.json <<'EOF'
+{
+  "client_id": "your_client_id",
+  "client_secret": "your_client_secret",
+  "instance_url": "https://your-instance.my.salesforce.com",
+  "tenant_id": "your_tenant_id"
+}
+EOF
+
+export SFDC_CREDENTIALS=$PWD/credentials.json
 
 cargo run --example restapi
+```
+
+### Running Integration Tests
+
+Integration tests use the same `SFDC_CREDENTIALS` env var. Without it, they skip silently:
+
+```bash
+SFDC_CREDENTIALS=$PWD/credentials.json cargo test --test auth --test restapi --test composite --test bulkapi
 ```
 
 ### Code Quality Standards
@@ -260,7 +293,7 @@ cargo run --example restapi
 - **No panics in production**: All production code uses `Result` types with `?` operator
 - **Error handling**: Custom error types use `thiserror` with proper source chain preservation
 - **Documentation**: All public APIs have comprehensive documentation with examples
-- **Testing**: 106 tests covering unit tests and doc tests
+- **Testing**: Unit tests, doc tests, and opt-in integration tests against a real Salesforce org
 - **Dependency management**: All dependencies use workspace-level version management
 
 ## License
