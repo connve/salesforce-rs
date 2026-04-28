@@ -4,6 +4,9 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+description = "Generated Salesforce Tooling API client (used by salesforce_core)"
+repository.workspace = true
+homepage.workspace = true
 
 [lib]
 name = "salesforce_core_toolingapi"
