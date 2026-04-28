@@ -9,10 +9,11 @@ members = [
 ]
 
 [workspace.package]
-version = "0.13.3"
+version = "0.13.4"
 authors = ["CONNVE"]
 license = "MPL-2.0"
 edition = "2021"
+rust-version = "1.88"
 description = "Unofficial Rust SDK for Salesforce APIs"
 repository = "https://github.com/connve/salesforce-rs"
 homepage = "https://github.com/connve/salesforce-rs"
@@ -23,10 +24,10 @@ categories = ["api-bindings", "asynchronous"]
 publish = true
 
 [workspace.dependencies]
-salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "0.13.3" }
-salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "0.13.3" }
-salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "0.13.3" }
-salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "0.13.3" }
+salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "0.13.4" }
+salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "0.13.4" }
+salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "0.13.4" }
+salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "0.13.4" }
 tokio = { version = "1.48", default-features = false, features = [
     "macros",
     "rt-multi-thread",

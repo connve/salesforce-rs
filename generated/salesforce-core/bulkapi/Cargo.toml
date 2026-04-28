@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Generated Salesforce Bulk API 2.0 client (used by salesforce_core)"
 repository.workspace = true
 homepage.workspace = true
