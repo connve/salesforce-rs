@@ -18,10 +18,10 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
-salesforce_core_pubsubapi = { path = "../generated/salesforce-core/pubsubapi" }
-salesforce_core_bulkapi = { path = "../generated/salesforce-core/bulkapi" }
-salesforce_core_restapi = { path = "../generated/salesforce-core/restapi" }
-salesforce_core_toolingapi = { path = "../generated/salesforce-core/toolingapi" }
+salesforce_core_pubsubapi = { workspace = true }
+salesforce_core_bulkapi = { workspace = true }
+salesforce_core_restapi = { workspace = true }
+salesforce_core_toolingapi = { workspace = true }
 oauth2 = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
