@@ -1,6 +1,7 @@
 //! Bulk API v2.0 client that wraps the authentication client.
 
 use crate::client;
+use crate::http::HttpClientCache;
 use std::sync::Arc;
 
 /// Client for Salesforce Bulk API v2.0.
@@ -53,6 +54,7 @@ pub struct Client {
     api_version: String,
     connect_timeout: std::time::Duration,
     request_timeout: std::time::Duration,
+    http_cache: Arc<HttpClientCache>,
 }
 
 /// Error type for Bulk API client builder.
@@ -307,6 +309,7 @@ impl ClientBuilder {
                 .unwrap_or(std::time::Duration::from_secs(
                     crate::DEFAULT_REQUEST_TIMEOUT_SECS,
                 )),
+            http_cache: Arc::new(HttpClientCache::new()),
         })
     }
 }
@@ -398,6 +401,17 @@ impl Client {
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn ingest(&self) -> super::ingest::IngestClient {
         super::ingest::IngestClient::new(self.clone())
+    }
+
+    /// Gets a cached HTTP client with authentication headers for API requests.
+    pub(crate) async fn get_http_client(&self) -> Result<reqwest::Client, crate::http::Error> {
+        self.http_cache
+            .get(
+                self.auth_client.as_ref(),
+                self.connect_timeout(),
+                self.request_timeout(),
+            )
+            .await
     }
 
     /// Internal helper to get the base URL for Bulk API.

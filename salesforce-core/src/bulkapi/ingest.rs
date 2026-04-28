@@ -20,21 +20,18 @@ impl IngestClient {
         Self { bulk_client }
     }
 
-    /// Helper to build an HTTP client with authentication headers and connection pooling.
+    /// Gets a cached HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        crate::http::get_http_client(
-            self.bulk_client.auth_client(),
-            self.bulk_client.connect_timeout(),
-            self.bulk_client.request_timeout(),
-        )
-        .await
-        .map_err(|e| match e {
-            crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
-                source: client::Error::LockError,
-            },
-            crate::http::Error::Build { source } => Error::Communication { source },
-        })
+        self.bulk_client
+            .get_http_client()
+            .await
+            .map_err(|e| match e {
+                crate::http::Error::Auth { source } => Error::Auth { source },
+                crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
+                    source: client::Error::LockError,
+                },
+                crate::http::Error::Build { source } => Error::Communication { source },
+            })
     }
 
     /// Creates a new bulk ingest job.

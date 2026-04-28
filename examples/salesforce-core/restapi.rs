@@ -8,27 +8,20 @@
 //! - Deleting records
 //! - Describing SObject metadata
 
-use salesforce_core::client::{self, Credentials};
+use salesforce_core::client;
 use salesforce_core::restapi::ClientBuilder;
 use serde_json::json;
 use std::env;
+use std::path::PathBuf;
 use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing subscriber for logging
     tracing_subscriber::fmt::init();
 
-    // Initialize the Salesforce authentication client
+    let credentials_path = PathBuf::from(env::var("SFDC_CREDENTIALS")?);
     let auth_client = client::Builder::new()
-        .credentials(Credentials {
-            client_id: env::var("SALESFORCE_CLIENT_ID")?,
-            client_secret: Some(env::var("SALESFORCE_CLIENT_SECRET")?),
-            username: None,
-            password: None,
-            instance_url: env::var("SALESFORCE_INSTANCE_URL")?,
-            tenant_id: env::var("SALESFORCE_TENANT_ID")?,
-        })
+        .credentials_path(credentials_path)
         .build()?
         .connect()
         .await?;
@@ -91,8 +84,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_string_pretty(&updated_account)?
     );
 
-    // Example 4: Describe SObject metadata
-    info!("\n--- Example 4: Describing Account SObject ---");
+    // Example 4a: Get SObject basic info (lightweight, returns recently viewed records)
+    info!("\n--- Example 4a: Account basic info ---");
+    let info_resp = rest_client.basic_info("Account").await?;
+    info!(
+        "Account basic info: queryable={}, recent items={}",
+        info_resp.object_describe.queryable,
+        info_resp.recent_items.len()
+    );
+
+    // Example 4b: Describe SObject metadata (full field-level metadata)
+    info!("\n--- Example 4b: Describing Account SObject ---");
     let describe = rest_client.describe("Account").await?;
     info!("Account metadata:");
     info!("  - Name: {}", describe.name);

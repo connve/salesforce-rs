@@ -2,8 +2,11 @@
 //!
 //! This module provides common functionality for building HTTP clients with
 //! authentication headers, connection pooling, and timeout configuration.
+//! The HTTP client is cached and reused across requests, only rebuilding
+//! when the access token changes (e.g., after a refresh or re-authentication).
 
 use crate::client;
+use std::sync::RwLock;
 use std::time::Duration;
 
 /// Error type for HTTP client building.
@@ -20,6 +23,10 @@ pub enum Error {
     #[error("Failed to create HTTP headers")]
     InvalidHeader,
 
+    /// Failed to acquire lock on HTTP client cache.
+    #[error("Failed to acquire lock on HTTP client cache")]
+    Lock,
+
     /// Failed to build the HTTP client.
     #[error("Failed to build HTTP client: {source}")]
     Build {
@@ -28,38 +35,72 @@ pub enum Error {
     },
 }
 
-/// Builds an HTTP client configured for Salesforce API requests.
-///
-/// This function creates a `reqwest::Client` with:
-/// - Bearer token authentication headers
-/// - Configurable connection and request timeouts
-/// - TCP keepalive for connection health
-/// - Connection pooling with idle timeout and max connections per host
-///
-/// # Arguments
-///
-/// * `auth_client` - The authenticated Salesforce client to get the access token from
-/// * `connect_timeout` - Timeout for establishing connections
-/// * `request_timeout` - Timeout for completing requests
-///
-/// # Returns
-///
-/// A configured `reqwest::Client` ready for API requests.
-///
-/// # Errors
-///
-/// Returns an error if token retrieval fails, header construction fails,
-/// or the HTTP client cannot be built.
-pub async fn get_http_client(
-    auth_client: &client::Client,
+/// Cached HTTP client paired with the token it was built for.
+#[derive(Debug)]
+pub(crate) struct CachedHttpClient {
+    /// The cached token string used to build the current client.
+    token: String,
+    /// The cached reqwest::Client built with that token.
+    client: reqwest::Client,
+}
+
+/// Thread-safe cache for an HTTP client that is rebuilt only when the token changes.
+#[derive(Debug)]
+pub(crate) struct HttpClientCache {
+    cache: RwLock<Option<CachedHttpClient>>,
+}
+
+impl HttpClientCache {
+    /// Creates a new empty cache.
+    pub(crate) fn new() -> Self {
+        Self {
+            cache: RwLock::new(None),
+        }
+    }
+
+    /// Returns a cached HTTP client, rebuilding only if the token has changed.
+    pub(crate) async fn get(
+        &self,
+        auth_client: &client::Client,
+        connect_timeout: Duration,
+        request_timeout: Duration,
+    ) -> Result<reqwest::Client, Error> {
+        let token = auth_client
+            .access_token()
+            .await
+            .map_err(|source| Error::Auth { source })?;
+
+        // Fast path: check if cached client has the same token.
+        {
+            let cache = self.cache.read().map_err(|_| Error::Lock)?;
+            if let Some(cached) = cache.as_ref() {
+                if cached.token == token {
+                    return Ok(cached.client.clone());
+                }
+            }
+        }
+
+        // Token changed (or first call): build a new client.
+        let client = build_http_client(&token, connect_timeout, request_timeout)?;
+
+        {
+            let mut cache = self.cache.write().map_err(|_| Error::Lock)?;
+            *cache = Some(CachedHttpClient {
+                token,
+                client: client.clone(),
+            });
+        }
+
+        Ok(client)
+    }
+}
+
+/// Builds an HTTP client with the given bearer token and timeout configuration.
+fn build_http_client(
+    token: &str,
     connect_timeout: Duration,
     request_timeout: Duration,
 ) -> Result<reqwest::Client, Error> {
-    let token = auth_client
-        .access_token()
-        .await
-        .map_err(|source| Error::Auth { source })?;
-
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert(
         reqwest::header::AUTHORIZATION,

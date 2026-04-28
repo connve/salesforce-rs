@@ -22,21 +22,15 @@ use futures_util::StreamExt;
 use salesforce_core::bulkapi::{
     ClientBuilder, CreateIngestJobRequest, CreateQueryJobRequest, IngestOperation, QueryOperation,
 };
-use salesforce_core::client::{self, Credentials};
+use salesforce_core::client;
+use std::path::PathBuf;
 use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize the Salesforce client
+    let credentials_path = PathBuf::from(std::env::var("SFDC_CREDENTIALS")?);
     let auth_client = client::Builder::new()
-        .credentials(Credentials {
-            client_id: std::env::var("SALESFORCE_CLIENT_ID")?,
-            client_secret: Some(std::env::var("SALESFORCE_CLIENT_SECRET")?),
-            username: None,
-            password: None,
-            instance_url: std::env::var("SALESFORCE_INSTANCE_URL")?,
-            tenant_id: std::env::var("SALESFORCE_TENANT_ID")?,
-        })
+        .credentials_path(credentials_path)
         .build()?
         .connect()
         .await?;

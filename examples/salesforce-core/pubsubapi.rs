@@ -1,4 +1,4 @@
-use salesforce_core::client::{self, AuthFlow, Credentials};
+use salesforce_core::client;
 use salesforce_core::pubsubapi::{
     Client, FetchRequest, ReplayPreset, SchemaRequest, TopicRequest, ENDPOINT,
 };
@@ -9,42 +9,9 @@ use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Example 1: Initialize client from credentials file
-    // The auth_flow defaults to ClientCredentials if not specified
-    let _client = client::Builder::new()
-        .credentials_path(PathBuf::from("credentials.json"))
-        .build()?
-        .connect()
-        .await?;
-
-    // Example 2: Initialize client with Client Credentials flow (environment variables)
-    let _client = client::Builder::new()
-        .credentials(Credentials {
-            client_id: env::var("SALESFORCE_CLIENT_ID")?,
-            client_secret: Some(env::var("SALESFORCE_CLIENT_SECRET")?),
-            username: None,
-            password: None,
-            instance_url: env::var("SALESFORCE_INSTANCE_URL")
-                .unwrap_or_else(|_| "https://mysalesforce.my.salesforce.com".to_string()),
-            tenant_id: env::var("SALESFORCE_TENANT_ID")?,
-        })
-        .auth_flow(AuthFlow::ClientCredentials)
-        .build()?
-        .connect()
-        .await?;
-
-    // Example 3: Initialize client with Username-Password flow
+    let credentials_path = PathBuf::from(env::var("SFDC_CREDENTIALS")?);
     let client = client::Builder::new()
-        .credentials(Credentials {
-            client_id: env::var("SALESFORCE_CLIENT_ID")?,
-            client_secret: Some(env::var("SALESFORCE_CLIENT_SECRET")?),
-            username: Some(env::var("SALESFORCE_USERNAME")?),
-            password: Some(env::var("SALESFORCE_PASSWORD")?),
-            instance_url: env::var("SALESFORCE_INSTANCE_URL")
-                .unwrap_or_else(|_| "https://mysalesforce.my.salesforce.com".to_string()),
-            tenant_id: env::var("SALESFORCE_TENANT_ID")?,
-        })
-        .auth_flow(AuthFlow::UsernamePassword)
+        .credentials_path(credentials_path)
         .build()?
         .connect()
         .await?;

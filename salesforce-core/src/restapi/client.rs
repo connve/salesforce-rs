@@ -16,6 +16,7 @@ pub struct Client {
     pub(crate) api_version: String,
     pub(crate) connect_timeout: Duration,
     pub(crate) request_timeout: Duration,
+    pub(crate) http_cache: Arc<crate::http::HttpClientCache>,
 }
 
 /// Error type for REST API client builder.
@@ -133,6 +134,7 @@ impl ClientBuilder {
             request_timeout: self
                 .request_timeout
                 .unwrap_or_else(|| Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS)),
+            http_cache: Arc::new(crate::http::HttpClientCache::new()),
         })
     }
 }
@@ -177,14 +179,16 @@ impl Client {
 
     /// Gets an HTTP client with authentication headers for API requests.
     ///
-    /// This creates a new reqwest::Client with the current access token in the Authorization header.
+    /// Returns a cached client when the token hasn't changed, reusing
+    /// TCP connections and TLS sessions for better performance.
     pub(crate) async fn get_http_client(&self) -> Result<reqwest::Client, crate::http::Error> {
-        crate::http::get_http_client(
-            self.auth_client.as_ref(),
-            self.connect_timeout(),
-            self.request_timeout(),
-        )
-        .await
+        self.http_cache
+            .get(
+                self.auth_client.as_ref(),
+                self.connect_timeout(),
+                self.request_timeout(),
+            )
+            .await
     }
 
     /// Access SObject CRUD operations.

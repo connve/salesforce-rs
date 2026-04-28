@@ -30,6 +30,35 @@ jobs:
         cargo test --verbose
         cargo fmt --all
 
+  integration-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    - name: Install system dependencies
+      run: |
+        sudo apt update -qq
+        sudo apt-get -qq install pkg-config libssl-dev protobuf-compiler git
+    - name: Write credentials file
+      env:
+        CREDENTIALS_JSON: ${{ secrets.SFDC_CREDENTIALS }}
+      run: |
+        if [ -z "$CREDENTIALS_JSON" ]; then
+          echo "::error::SFDC_CREDENTIALS secret is not set"
+          exit 1
+        fi
+        printf '%s' "$CREDENTIALS_JSON" > "$RUNNER_TEMP/sfdc_credentials.json"
+    - name: Run integration tests
+      env:
+        SFDC_CREDENTIALS: ${{ runner.temp }}/sfdc_credentials.json
+      run: cargo test --verbose --test auth --test restapi --test composite --test bulkapi
+
   test-rust-nightly:
     runs-on: ubuntu-latest
     continue-on-error: true
