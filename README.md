@@ -1,5 +1,7 @@
 # Salesforce Rust SDK
 
+[![Crates.io](https://img.shields.io/crates/v/salesforce_core.svg)](https://crates.io/crates/salesforce_core)
+[![Docs.rs](https://docs.rs/salesforce_core/badge.svg)](https://docs.rs/salesforce_core)
 [![Test Suite](https://github.com/connve-labs/salesforce-rs/actions/workflows/test.yml/badge.svg)](https://github.com/connve-labs/salesforce-rs/actions/workflows/test.yml)
 [![Security Audit](https://github.com/connve-labs/salesforce-rs/actions/workflows/security.yml/badge.svg)](https://github.com/connve-labs/salesforce-rs/actions/workflows/security.yml)
 [![Release](https://img.shields.io/github/v/release/connve-labs/salesforce-rs)](https://github.com/connve-labs/salesforce-rs/releases)
@@ -20,11 +22,17 @@ Unofficial Rust SDK for the Salesforce API with support for OAuth2 authenticatio
 
 ## Installation
 
-This package is not yet published to crates.io. Install directly from GitHub:
+Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-salesforce_core = { git = "https://github.com/connve-labs/salesforce-rs" }
+salesforce_core = "0.13"
+```
+
+Or install with cargo:
+
+```bash
+cargo add salesforce_core
 ```
 
 ## Quick Start
