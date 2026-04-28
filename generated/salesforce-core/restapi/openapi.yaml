@@ -1065,7 +1065,13 @@ paths:
                   Name: "Global Industries"
       responses:
         '200':
-          description: Records upsert attempted (check individual results for success)
+          description: Records upsert attempted, all records updated (check individual results)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositeCollectionUpsertResponse'
+        '201':
+          description: Records upsert attempted, at least one record created (check individual results)
           content:
             application/json:
               schema:
@@ -1125,7 +1131,7 @@ paths:
                         FirstName: "Jane"
                         LastName: "Smith"
       responses:
-        '200':
+        '201':
           description: Record tree creation attempted (check hasErrors and individual results)
           content:
             application/json:
