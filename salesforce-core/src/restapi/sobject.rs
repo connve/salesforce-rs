@@ -103,7 +103,7 @@ impl Client {
         let sobject_type = sobject_type.as_ref();
         let http_client = self.get_http_client().await.map_err(|e| match e {
             crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
+            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
                 source: client::Error::LockError,
             },
             crate::http::Error::Build { source } => Error::Communication { source },
@@ -192,7 +192,7 @@ impl Client {
         let record_id = record_id.as_ref();
         let http_client = self.get_http_client().await.map_err(|e| match e {
             crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
+            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
                 source: client::Error::LockError,
             },
             crate::http::Error::Build { source } => Error::Communication { source },
@@ -264,7 +264,7 @@ impl Client {
         let field_value = field_value.as_ref();
         let http_client = self.get_http_client().await.map_err(|e| match e {
             crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
+            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
                 source: client::Error::LockError,
             },
             crate::http::Error::Build { source } => Error::Communication { source },
@@ -330,7 +330,7 @@ impl Client {
         let record_id = record_id.as_ref();
         let http_client = self.get_http_client().await.map_err(|e| match e {
             crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
+            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
                 source: client::Error::LockError,
             },
             crate::http::Error::Build { source } => Error::Communication { source },
@@ -405,7 +405,7 @@ impl Client {
         let record_id = record_id.as_ref();
         let http_client = self.get_http_client().await.map_err(|e| match e {
             crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
+            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
                 source: client::Error::LockError,
             },
             crate::http::Error::Build { source } => Error::Communication { source },
@@ -465,7 +465,7 @@ impl Client {
         let sobject_type = sobject_type.as_ref();
         let http_client = self.get_http_client().await.map_err(|e| match e {
             crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
+            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
                 source: client::Error::LockError,
             },
             crate::http::Error::Build { source } => Error::Communication { source },

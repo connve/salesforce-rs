@@ -50,11 +50,18 @@ pub mod sobject;
 /// Composite API operations for bulk record operations.
 pub mod composite;
 
+/// SOSL search operations.
+pub mod search;
+
 pub use client::{Client, ClientBuilder, Error as ClientError};
 
 // SObject types
 pub use salesforce_core_restapi::types::{CreateRecordResponse, SObjectDescribe, SObjectField};
 pub use sobject::Error as SObjectError;
+
+// Search types
+pub use salesforce_core_restapi::types::{SearchRecord, SearchRecordAttributes, SearchResponse};
+pub use search::Error as SearchError;
 
 // Composite types
 pub use composite::Error as CompositeError;

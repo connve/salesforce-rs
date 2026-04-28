@@ -1,6 +1,7 @@
 //! Tooling API client wrapper.
 
 use crate::client;
+use crate::http::HttpClientCache;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -63,6 +64,7 @@ pub struct Client {
     api_version: String,
     connect_timeout: Duration,
     request_timeout: Duration,
+    http_cache: Arc<HttpClientCache>,
 }
 
 /// Builder for creating a Tooling API client.
@@ -168,6 +170,7 @@ impl ClientBuilder {
             request_timeout: self
                 .request_timeout
                 .unwrap_or_else(|| Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS)),
+            http_cache: Arc::new(HttpClientCache::new()),
         })
     }
 }
@@ -210,21 +213,22 @@ impl Client {
         ))
     }
 
-    /// Helper to build an HTTP client with authentication headers and connection pooling.
+    /// Gets a cached HTTP client with authentication headers and connection pooling.
     async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        crate::http::get_http_client(
-            self.auth_client().as_ref(),
-            self.connect_timeout(),
-            self.request_timeout(),
-        )
-        .await
-        .map_err(|e| match e {
-            crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader => Error::Auth {
-                source: client::Error::LockError,
-            },
-            crate::http::Error::Build { source } => Error::Communication { source },
-        })
+        self.http_cache
+            .get(
+                self.auth_client.as_ref(),
+                self.connect_timeout(),
+                self.request_timeout(),
+            )
+            .await
+            .map_err(|e| match e {
+                crate::http::Error::Auth { source } => Error::Auth { source },
+                crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
+                    source: client::Error::LockError,
+                },
+                crate::http::Error::Build { source } => Error::Communication { source },
+            })
     }
 
     /// Creates a managed event subscription.

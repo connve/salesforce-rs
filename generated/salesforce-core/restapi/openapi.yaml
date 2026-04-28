@@ -58,6 +58,47 @@ components:
       items:
         $ref: '#/components/schemas/Error'
 
+    # Search (SOSL) Schemas
+    SearchResponse:
+      type: object
+      required:
+        - searchRecords
+      properties:
+        searchRecords:
+          type: array
+          description: Array of matching records from the SOSL search
+          items:
+            $ref: '#/components/schemas/SearchRecord'
+
+    SearchRecord:
+      type: object
+      required:
+        - attributes
+        - Id
+      properties:
+        attributes:
+          $ref: '#/components/schemas/SearchRecordAttributes'
+        Id:
+          type: string
+          description: Salesforce ID of the matching record
+          example: "001xx000003DGb2AAG"
+      additionalProperties: {}
+
+    SearchRecordAttributes:
+      type: object
+      required:
+        - type
+        - url
+      properties:
+        type:
+          type: string
+          description: SObject type of the matching record
+          example: "Account"
+        url:
+          type: string
+          description: REST API URL to the record
+          example: "/services/data/v65.0/sobjects/Account/001xx000003DGb2AAG"
+
     # SObject CRUD Schemas
     CreateRecordResponse:
       type: object
@@ -1103,8 +1144,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /search:
+    get:
+      summary: Search (SOSL)
+      description: |
+        Executes a SOSL search query and returns matching records across multiple SObject types.
+        The search string must be URL-encoded and is a valid SOSL query.
+      operationId: search
+      tags:
+        - Search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: A SOSL search query string (e.g., "FIND {Acme} IN ALL FIELDS RETURNING Account(Id, Name), Contact(Id, Name)")
+          schema:
+            type: string
+          example: "FIND {Acme} IN ALL FIELDS RETURNING Account(Id, Name), Contact(Id, Name)"
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: Bad request (malformed SOSL query)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 tags:
   - name: SObject
     description: SObject REST API operations for CRUD operations on individual records
   - name: Composite
     description: Composite API for bulk operations on multiple records
+  - name: Search
+    description: SOSL search operations
