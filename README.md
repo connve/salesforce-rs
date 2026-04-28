@@ -288,6 +288,17 @@ Integration tests use the same `SFDC_CREDENTIALS` env var. Without it, they skip
 SFDC_CREDENTIALS=$PWD/credentials.json cargo test --test auth --test restapi --test composite --test bulkapi
 ```
 
+### Releasing
+
+Bump the version across the workspace and all path-dep declarations in one command:
+
+```bash
+cargo install cargo-workspaces  # one-time
+cargo workspaces version --no-git-commit --yes patch  # or: minor, major
+```
+
+Commit the resulting `Cargo.toml` changes and merge to `main`. The release workflow detects the version bump, tags the commit, and publishes to crates.io.
+
 ### Code Quality Standards
 
 - **No panics in production**: All production code uses `Result` types with `?` operator
