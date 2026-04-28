@@ -221,6 +221,69 @@ components:
               value:
                 type: string
 
+    SObjectMetadata:
+      type: object
+      required:
+        - name
+        - label
+        - labelPlural
+        - createable
+        - updateable
+        - deletable
+        - queryable
+      properties:
+        name:
+          type: string
+          description: API name of the SObject
+          example: "Account"
+        label:
+          type: string
+          description: Display label
+          example: "Account"
+        labelPlural:
+          type: string
+          description: Plural display label
+          example: "Accounts"
+        keyPrefix:
+          type: string
+          description: Three-character prefix for IDs
+          example: "001"
+        createable:
+          type: boolean
+          description: Whether records can be created
+          example: true
+        updateable:
+          type: boolean
+          description: Whether records can be updated
+          example: true
+        deletable:
+          type: boolean
+          description: Whether records can be deleted
+          example: true
+        queryable:
+          type: boolean
+          description: Whether the object can be queried
+          example: true
+      additionalProperties: true
+      description: Common metadata flags for an SObject type
+
+    SObjectBasicInfo:
+      type: object
+      required:
+        - objectDescribe
+      properties:
+        objectDescribe:
+          $ref: '#/components/schemas/SObjectMetadata'
+        recentItems:
+          type: array
+          description: Recently viewed records of this SObject type
+          items:
+            type: object
+            additionalProperties: true
+      description: |
+        Basic info response from GET /sobjects/{sObjectType}. Contains object-level
+        metadata and a list of recently viewed records, but no field definitions.
+
     SObjectDescribe:
       type: object
       required:
@@ -575,11 +638,49 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
     get:
+      summary: Get SObject Basic Info
+      description: |
+        Retrieves basic metadata for the specified SObject type, plus a list of
+        recently viewed records. For complete field-level metadata, use the
+        `describeSObject` endpoint instead.
+      operationId: getSobjectBasicInfo
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+      responses:
+        '200':
+          description: SObject basic info retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SObjectBasicInfo'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: SObject type not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sobjects/{sObjectType}/describe:
+    get:
       summary: Describe SObject
       description: |
-        Retrieves metadata for the specified SObject type, including all fields,
-        record types, and permissions.
-      operationId: describeSObject
+        Retrieves complete metadata for the specified SObject type, including all
+        fields, record types, child relationships, and permissions.
+      operationId: describeSobject
       tags:
         - SObject
       parameters:

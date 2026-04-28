@@ -2,7 +2,7 @@
 
 use super::Client;
 use crate::client;
-use salesforce_core_restapi::types::{CreateRecordResponse, SObjectDescribe};
+use salesforce_core_restapi::types::{CreateRecordResponse, SObjectBasicInfo, SObjectDescribe};
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
 
@@ -474,7 +474,35 @@ impl Client {
         let client = GeneratedClient::new_with_client(&base_url, http_client);
 
         let response = client
-            .describe_s_object(sobject_type)
+            .describe_sobject(sobject_type)
+            .await
+            .map_err(|source| Error::SObjectApi { source })?;
+
+        Ok(response.into_inner())
+    }
+
+    /// Retrieves basic info for an SObject type, including object-level metadata
+    /// flags and a list of recently viewed records.
+    ///
+    /// This calls `GET /sobjects/{sObjectType}` and returns a lightweight summary.
+    /// For full field-level metadata, use [`describe`](Self::describe) instead.
+    pub async fn basic_info(
+        &self,
+        sobject_type: impl AsRef<str>,
+    ) -> Result<SObjectBasicInfo, Error> {
+        let sobject_type = sobject_type.as_ref();
+        let http_client = self.get_http_client().await.map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
+                source: client::Error::LockError,
+            },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })?;
+        let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
+        let client = GeneratedClient::new_with_client(&base_url, http_client);
+
+        let response = client
+            .get_sobject_basic_info(sobject_type)
             .await
             .map_err(|source| Error::SObjectApi { source })?;
 

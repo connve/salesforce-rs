@@ -75,6 +75,20 @@ async fn test_describe_account() -> Result {
 }
 
 #[tokio::test]
+async fn test_basic_info_account() -> Result {
+    skip_if_no_credentials!();
+
+    let auth = common::auth_client().await?;
+    let client = ClientBuilder::new(auth).build()?;
+
+    let info = client.basic_info("Account").await?;
+    assert_eq!(info.object_describe.name, "Account");
+    assert!(info.object_describe.queryable);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_create_invalid_sobject_type() -> Result {
     skip_if_no_credentials!();
 
