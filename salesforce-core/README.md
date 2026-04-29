@@ -54,16 +54,107 @@ The credentials JSON file:
 }
 ```
 
-## What's included
+## API coverage
 
-- **OAuth2** — client credentials flow, username-password flow, automatic token refresh
-- **REST API** — SObject CRUD, describe, basic info, SOSL search
-- **Composite REST API** — batch create/update/delete/retrieve, upsert, record trees
-- **Bulk API 2.0** — query and ingest jobs for large datasets
-- **Pub/Sub API (gRPC)** — platform events, Change Data Capture, managed subscriptions
-- **Tooling API** — managed event subscription metadata
+### Authentication
 
-For the full API reference and examples, see the [project README](https://github.com/connve/salesforce-rs#readme) and the [examples directory](https://github.com/connve/salesforce-rs/tree/main/examples).
+| Feature | Status |
+|---------|--------|
+| OAuth2 Client Credentials Flow | ✓ |
+| OAuth2 Username-Password Flow | ✓ |
+| Automatic Token Refresh | ✓ |
+| Session Reconnection | ✓ |
+
+### SObject REST API
+
+| Operation | Status |
+|-----------|--------|
+| Create Record | ✓ |
+| Get Record | ✓ |
+| Get Record by External ID | ✓ |
+| Update Record | ✓ |
+| Delete Record | ✓ |
+| Get SObject Basic Info | ✓ |
+| Describe SObject | ✓ |
+
+### Composite REST API
+
+| Operation | Status |
+|-----------|--------|
+| Create Records (batch) | ✓ |
+| Update Records (batch) | ✓ |
+| Delete Records (batch) | ✓ |
+| Retrieve Records (batch) | ✓ |
+| Upsert Records (batch) | ✓ |
+| Create Record Tree | ✓ |
+
+### Search
+
+| Operation | Status |
+|-----------|--------|
+| SOSL Search | ✓ |
+
+### Bulk API 2.0 — Query
+
+| Operation | Status |
+|-----------|--------|
+| Create Query Job | ✓ |
+| Get Query Job Info | ✓ |
+| Get Query Results | ✓ |
+| Get Query Result Pages | ✓ |
+| Get All Query Jobs | ✓ |
+| Abort Query Job | ✓ |
+| Delete Query Job | ✓ |
+
+### Bulk API 2.0 — Ingest
+
+| Operation | Status |
+|-----------|--------|
+| Create Ingest Job | ✓ |
+| Get Ingest Job Info | ✓ |
+| Upload Job Data | ✓ |
+| Mark Upload Complete | ✓ |
+| Get Successful Results | ✓ |
+| Get Failed Results | ✓ |
+| Get Unprocessed Results | ✓ |
+| Get All Ingest Jobs | ✓ |
+| Abort Ingest Job | ✓ |
+| Delete Ingest Job | ✓ |
+
+### Pub/Sub API (gRPC)
+
+| Operation | Status |
+|-----------|--------|
+| Get Topic | ✓ |
+| Get Schema | ✓ |
+| Subscribe | ✓ |
+| Managed Subscribe | ✓ |
+| Publish | ✓ |
+| Publish Stream | ✓ |
+| Get Topic by Schema ID | ✓ |
+
+### Tooling API
+
+| Operation | Status |
+|-----------|--------|
+| Create Managed Event Subscription | ✓ |
+| Get Managed Event Subscription | — |
+| Update Managed Event Subscription | — |
+| Delete Managed Event Subscription | — |
+
+## Examples
+
+See the [examples directory](https://github.com/connve/salesforce-rs/tree/main/examples/salesforce-core):
+
+- [`restapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/restapi.rs) — SObject CRUD operations
+- [`bulkapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/bulkapi.rs) — Query and ingest for large datasets
+- [`toolingapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/toolingapi.rs) — Managed event subscriptions
+- [`pubsubapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/pubsubapi.rs) — Platform events and CDC via gRPC
+
+```bash
+export SFDC_CREDENTIALS=$PWD/credentials.json
+cargo run --example restapi
+```
 
 ## License
 

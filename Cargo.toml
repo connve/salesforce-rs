@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.13.4"
+version = "0.13.5"
 authors = ["CONNVE"]
 license = "MPL-2.0"
 edition = "2021"
