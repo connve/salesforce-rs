@@ -3,9 +3,9 @@
 [![Crates.io](https://img.shields.io/crates/v/salesforce_core.svg)](https://crates.io/crates/salesforce_core)
 [![Docs.rs](https://docs.rs/salesforce_core/badge.svg)](https://docs.rs/salesforce_core)
 
-Unofficial Rust SDK for the **Salesforce Core** (Sales Cloud, Service Cloud, Platform, etc.) APIs: REST, Bulk 2.0, Pub/Sub (gRPC), and Tooling.
+Unofficial Rust SDK for the **Salesforce Core** (Sales Cloud, Service Cloud, Platform) APIs: REST, Bulk 2.0, Pub/Sub (gRPC), and Tooling.
 
-Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project. Sibling crates for other Salesforce products (Marketing Cloud, Data Cloud, etc.) live in the same repo.
+Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ## Installation
 
@@ -138,9 +138,6 @@ The credentials JSON file:
 | Operation | Status |
 |-----------|--------|
 | Create Managed Event Subscription | ✓ |
-| Get Managed Event Subscription | — |
-| Update Managed Event Subscription | — |
-| Delete Managed Event Subscription | — |
 
 ## Examples
 
