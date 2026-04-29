@@ -1,1 +1,1 @@
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated.rs"));
+include!(concat!(env!("OUT_DIR"), "/generated.rs"));
