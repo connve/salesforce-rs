@@ -4,17 +4,13 @@
 [![Security Audit](https://github.com/connve/salesforce-rs/actions/workflows/security.yml/badge.svg)](https://github.com/connve/salesforce-rs/actions/workflows/security.yml)
 [![Release](https://img.shields.io/github/v/release/connve/salesforce-rs)](https://github.com/connve/salesforce-rs/releases)
 
-Unofficial Rust SDK family for the Salesforce platform. Each Salesforce product cloud has its own crate; install only the ones you need.
+Unofficial Rust SDK family for the Salesforce platform.
 
 ## Crates
 
 | Crate | Product cloud |
 |-------|---------------|
 | [`salesforce_core`](https://crates.io/crates/salesforce_core) [![Crates.io](https://img.shields.io/crates/v/salesforce_core.svg)](https://crates.io/crates/salesforce_core) [![Docs.rs](https://docs.rs/salesforce_core/badge.svg)](https://docs.rs/salesforce_core) | Salesforce Core (Sales, Service, Platform) — REST, Bulk 2.0, Pub/Sub, Tooling |
-
-For each crate's documentation, API coverage, and quick-start examples, see its dedicated README:
-
-- [`salesforce-core/README.md`](salesforce-core/README.md) — Core APIs (REST, Bulk 2.0, Pub/Sub, Tooling)
 
 ## Project layout
 
@@ -24,15 +20,12 @@ salesforce-rs/
 ├── generated/
 │   └── salesforce-core/       # Auto-generated API clients
 │       ├── restapi/           # OpenAPI → progenitor
-│       ├── composite/
 │       ├── bulkapi/
 │       ├── toolingapi/
 │       └── pubsubapi/         # Protobuf → tonic
-└── examples/                  # Per-product, per-API runnable examples
+└── examples/
     └── salesforce-core/
 ```
-
-When a new product cloud (Marketing Cloud, Data Cloud, etc.) is added, it gets its own user-facing crate at the workspace root and its own generated subtree under `generated/`.
 
 ## Development
 
@@ -91,7 +84,7 @@ Commit the resulting `Cargo.toml` changes and merge to `main`. The release workf
 
 - **No panics in production**: All production code uses `Result` types with `?` operator
 - **Error handling**: Custom error types use `thiserror` with proper source chain preservation
-- **Documentation**: All public APIs have comprehensive documentation with examples
+- **Documentation**: All public APIs have rustdoc with examples
 - **Testing**: Unit tests, doc tests, and opt-in integration tests against a real Salesforce org
 - **Dependency management**: All dependencies use workspace-level version management
 
