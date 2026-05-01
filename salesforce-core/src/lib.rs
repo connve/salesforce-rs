@@ -32,153 +32,24 @@
 //! # }
 //! ```
 //!
-//! ## SObject REST API
+//! See module-level docs for per-API examples: [`restapi`], [`bulkapi`],
+//! [`toolingapi`], [`pubsubapi`].
 //!
-//! ```no_run
-//! use salesforce_core::client::{self, Credentials};
-//! use salesforce_core::restapi::ClientBuilder;
-//! use serde_json::json;
+//! # Cargo features
 //!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # let auth_client = client::Builder::new()
-//! #     .credentials(Credentials {
-//! #         client_id: "...".to_string(),
-//! #         client_secret: Some("...".to_string()),
-//! #         username: None,
-//! #         password: None,
-//! #         instance_url: "https://localhost".to_string(),
-//! #         tenant_id: "...".to_string(),
-//! #     })
-//! #     .build()?
-//! #     .connect()
-//! #     .await?;
-//! let rest_client = ClientBuilder::new(auth_client).build()?;
+//! Each API surface is gated behind a feature so applications only pay the
+//! compile-time cost of what they use. All four are enabled by default.
 //!
-//! // Create a record
-//! let data = json!({
-//!     "Name": "Acme Corporation",
-//!     "Industry": "Technology"
-//! });
-//! let record_id = rest_client.create("Account", data).await?;
-//! # Ok(())
-//! # }
-//! ```
+//! - `restapi` — SObject CRUD, search, composite collections (REST API)
+//! - `bulkapi` — Bulk API 2.0 query and ingest jobs
+//! - `toolingapi` — Tooling API (managed event subscriptions)
+//! - `pubsubapi` — Pub/Sub API gRPC streaming (pulls in `tonic`)
+//! - `trace` — adds `#[tracing::instrument]` spans to client methods
 //!
-//! ## Bulk API 2.0
+//! For a slim build, disable defaults and opt in:
 //!
-//! ```no_run
-//! use salesforce_core::client::{self, Credentials};
-//! use salesforce_core::bulkapi::{ClientBuilder, CreateQueryJobRequest, QueryOperation};
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # let auth_client = client::Builder::new()
-//! #     .credentials(Credentials {
-//! #         client_id: "...".to_string(),
-//! #         client_secret: Some("...".to_string()),
-//! #         username: None,
-//! #         password: None,
-//! #         instance_url: "https://localhost".to_string(),
-//! #         tenant_id: "...".to_string(),
-//! #     })
-//! #     .build()?
-//! #     .connect()
-//! #     .await?;
-//! let bulk_client = ClientBuilder::new(auth_client).build()?;
-//!
-//! // Create a query job
-//! let job = bulk_client
-//!     .query()
-//!     .create_job(&CreateQueryJobRequest {
-//!         operation: QueryOperation::Query,
-//!         query: "SELECT Id, Name FROM Account LIMIT 10".to_string(),
-//!         content_type: None,
-//!         column_delimiter: None,
-//!         line_ending: None,
-//!     })
-//!     .await?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## Tooling API
-//!
-//! ```no_run
-//! use salesforce_core::client::{self, Credentials};
-//! use salesforce_core::toolingapi::{
-//!     ClientBuilder, CreateManagedEventSubscriptionRequest,
-//!     ManagedEventSubscriptionMetadata, ReplayPreset, SubscriptionState,
-//! };
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # let auth_client = client::Builder::new()
-//! #     .credentials(Credentials {
-//! #         client_id: "...".to_string(),
-//! #         client_secret: Some("...".to_string()),
-//! #         username: None,
-//! #         password: None,
-//! #         instance_url: "https://localhost".to_string(),
-//! #         tenant_id: "...".to_string(),
-//! #     })
-//! #     .build()?
-//! #     .connect()
-//! #     .await?;
-//! let tooling_client = ClientBuilder::new(auth_client).build()?;
-//!
-//! // Create managed event subscription
-//! let subscription = CreateManagedEventSubscriptionRequest {
-//!     full_name: "Managed_Sub_AccountChangeEvent".to_string(),
-//!     metadata: ManagedEventSubscriptionMetadata {
-//!         label: "Account Change Events".to_string(),
-//!         topic_name: "/data/AccountChangeEvent".to_string(),
-//!         default_replay: ReplayPreset::Latest,
-//!         state: SubscriptionState::Run,
-//!         error_recovery_replay: ReplayPreset::Latest,
-//!     },
-//! };
-//! let response = tooling_client.create_managed_event_subscription(subscription).await?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## Pub/Sub API
-//!
-//! ```no_run
-//! use salesforce_core::client::{self, Credentials};
-//! use salesforce_core::pubsubapi::{Client as PubSubClient, ManagedFetchRequest};
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # let auth_client = client::Builder::new()
-//! #     .credentials(Credentials {
-//! #         client_id: "...".to_string(),
-//! #         client_secret: Some("...".to_string()),
-//! #         username: None,
-//! #         password: None,
-//! #         instance_url: "https://localhost".to_string(),
-//! #         tenant_id: "...".to_string(),
-//! #     })
-//! #     .build()?
-//! #     .connect()
-//! #     .await?;
-//! let channel = tonic::transport::Channel::from_static(salesforce_core::pubsubapi::ENDPOINT)
-//!     .connect()
-//!     .await?;
-//!
-//! let mut pubsub_client = PubSubClient::new(channel, auth_client)?;
-//!
-//! let request = ManagedFetchRequest {
-//!     developer_name: "Managed_Sub_AccountChangeEvent".to_string(),
-//!     num_requested: 100,
-//!     ..Default::default()
-//! };
-//!
-//! let stream = pubsub_client.managed_subscribe(request).await?;
-//! // Process events from stream...
-//! # Ok(())
-//! # }
+//! ```toml
+//! salesforce_core = { version = "0.13", default-features = false, features = ["restapi"] }
 //! ```
 
 /// Default Salesforce API version (Winter '26 - API version 65.0).
@@ -211,16 +82,21 @@ pub const DEFAULT_POOL_MAX_IDLE_PER_HOST: usize = 10;
 pub mod client;
 
 /// Salesforce Pub/Sub API for real-time event streaming.
+#[cfg(feature = "pubsubapi")]
 pub mod pubsubapi;
 
 /// Salesforce Bulk API 2.0 for querying and ingesting large data sets.
+#[cfg(feature = "bulkapi")]
 pub mod bulkapi;
 
 /// Salesforce REST API for SObject operations, queries, and searches.
+#[cfg(feature = "restapi")]
 pub mod restapi;
 
 /// Salesforce Tooling API for metadata operations.
+#[cfg(feature = "toolingapi")]
 pub mod toolingapi;
 
 /// Shared HTTP client utilities.
+#[cfg(any(feature = "restapi", feature = "bulkapi", feature = "toolingapi"))]
 pub(crate) mod http;

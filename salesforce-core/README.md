@@ -14,6 +14,25 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 salesforce_core = "0.13"
 ```
 
+## Cargo features
+
+Each API surface is gated behind a feature so applications only pay the
+compile-time cost of what they use. All four are enabled by default.
+
+| Feature      | Enables                                                      |
+|--------------|--------------------------------------------------------------|
+| `restapi`    | SObject CRUD, search, composite collections (REST API)       |
+| `bulkapi`    | Bulk API 2.0 query and ingest jobs                           |
+| `toolingapi` | Tooling API (managed event subscriptions)                    |
+| `pubsubapi`  | Pub/Sub API gRPC streaming (pulls in `tonic`)                |
+| `trace`      | Adds `#[tracing::instrument]` spans to client methods        |
+
+For a slim build, disable defaults and opt in:
+
+```toml
+salesforce_core = { version = "0.13", default-features = false, features = ["restapi"] }
+```
+
 ## Quick start
 
 Authenticate with the client credentials OAuth2 flow, then issue REST calls:

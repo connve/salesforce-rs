@@ -2,8 +2,7 @@
 
 mod common;
 
-use salesforce_core::bulkapi::ClientBuilder;
-use salesforce_core_bulkapi::types::{CreateQueryJobRequest, QueryOperation};
+use salesforce_core::bulkapi::{ClientBuilder, CreateQueryJobRequest, QueryOperation};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
