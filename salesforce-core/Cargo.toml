@@ -19,6 +19,11 @@ name = "salesforce_core"
 path = "src/lib.rs"
 
 [features]
+default = ["restapi", "bulkapi", "toolingapi", "pubsubapi"]
+restapi = ["dep:salesforce_core_restapi"]
+bulkapi = ["dep:salesforce_core_bulkapi"]
+toolingapi = ["dep:salesforce_core_toolingapi"]
+pubsubapi = ["dep:salesforce_core_pubsubapi", "dep:tonic", "dep:futures-util"]
 trace = []
 
 [dependencies]
@@ -26,17 +31,17 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
-salesforce_core_pubsubapi = { workspace = true }
-salesforce_core_bulkapi = { workspace = true }
-salesforce_core_restapi = { workspace = true }
-salesforce_core_toolingapi = { workspace = true }
+salesforce_core_pubsubapi = { workspace = true, optional = true }
+salesforce_core_bulkapi = { workspace = true, optional = true }
+salesforce_core_restapi = { workspace = true, optional = true }
+salesforce_core_toolingapi = { workspace = true, optional = true }
 oauth2 = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tonic = { workspace = true }
+tonic = { workspace = true, optional = true }
 tracing = { workspace = true }
-futures-util = { workspace = true }
+futures-util = { workspace = true, optional = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
@@ -44,15 +49,34 @@ tracing-subscriber = { workspace = true }
 [[example]]
 name = "pubsubapi"
 path = "../examples/salesforce-core/pubsubapi.rs"
+required-features = ["pubsubapi"]
 
 [[example]]
 name = "bulkapi"
 path = "../examples/salesforce-core/bulkapi.rs"
+required-features = ["bulkapi"]
 
 [[example]]
 name = "restapi"
 path = "../examples/salesforce-core/restapi.rs"
+required-features = ["restapi"]
 
 [[example]]
 name = "toolingapi"
 path = "../examples/salesforce-core/toolingapi.rs"
+required-features = ["toolingapi"]
+
+[[test]]
+name = "restapi"
+path = "tests/restapi.rs"
+required-features = ["restapi"]
+
+[[test]]
+name = "bulkapi"
+path = "tests/bulkapi.rs"
+required-features = ["bulkapi"]
+
+[[test]]
+name = "composite"
+path = "tests/composite.rs"
+required-features = ["restapi"]
