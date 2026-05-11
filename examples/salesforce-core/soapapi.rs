@@ -58,7 +58,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     overrides.insert("BillingCity".to_string(), json!("San Francisco"));
 
     let result = soap_client
-        .merge("Account", &master.id, &[&duplicate.id], Some(&overrides))
+        .merge(
+            "Account",
+            &master.id,
+            &[&duplicate.id],
+            Some(&overrides),
+            true,
+        )
         .await?;
     info!("Merge successful: {}", result.success);
     info!("Merged record IDs: {:?}", result.merged_record_ids);

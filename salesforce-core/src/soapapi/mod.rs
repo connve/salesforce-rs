@@ -35,7 +35,7 @@
 //! overrides.insert("BillingCity".to_string(), json!("San Francisco"));
 //!
 //! let result = soap_client
-//!     .merge("Account", "001xx000003DGb2AAG", &["001xx000003DGb3AAG"], Some(&overrides))
+//!     .merge("Account", "001xx000003DGb2AAG", &["001xx000003DGb3AAG"], Some(&overrides), true)
 //!     .await?;
 //! # Ok(())
 //! # }

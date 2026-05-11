@@ -56,6 +56,7 @@ impl Client {
     /// * `master_record_id` - The Salesforce ID of the master (winning) record.
     /// * `record_ids_to_merge` - IDs of records to merge into the master (one or two).
     /// * `master_field_overrides` - Optional field values to set on the master record during the merge.
+    /// * `allow_duplicate_save` - When `true`, includes a `DuplicateRuleHeader` to bypass duplicate detection rules.
     ///
     /// # Example
     ///
@@ -89,6 +90,7 @@ impl Client {
     ///         "001xx000003DGb2AAG",
     ///         &["001xx000003DGb3AAG"],
     ///         Some(&overrides),
+    ///         true,
     ///     )
     ///     .await?;
     /// assert!(result.success);
@@ -102,6 +104,7 @@ impl Client {
         master_record_id: impl AsRef<str>,
         record_ids_to_merge: &[impl AsRef<str>],
         master_field_overrides: Option<&serde_json::Map<String, Value>>,
+        allow_duplicate_save: bool,
     ) -> Result<MergeResponse, Error> {
         let sobject_type = sobject_type.as_ref();
         let master_record_id = master_record_id.as_ref();
@@ -144,6 +147,12 @@ impl Client {
             .await
             .map_err(|source| Error::Auth { source })?;
 
+        let duplicate_header = if allow_duplicate_save {
+            "\n    <sf:DuplicateRuleHeader>\n      <sf:allowSave>true</sf:allowSave>\n    </sf:DuplicateRuleHeader>"
+        } else {
+            ""
+        };
+
         let envelope = format!(
             r#"<?xml version="1.0" encoding="utf-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
@@ -152,7 +161,7 @@ impl Client {
   <soapenv:Header>
     <sf:SessionHeader>
       <sf:sessionId>{session_id}</sf:sessionId>
-    </sf:SessionHeader>
+    </sf:SessionHeader>{duplicate_header}
   </soapenv:Header>
   <soapenv:Body>
     <sf:merge>

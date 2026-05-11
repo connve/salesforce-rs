@@ -42,7 +42,13 @@ async fn test_merge_accounts() -> Result {
     master_fields.insert("BillingCity".to_string(), json!("San Francisco"));
 
     let merge_result = soap_client
-        .merge("Account", &master.id, &[&loser.id], Some(&master_fields))
+        .merge(
+            "Account",
+            &master.id,
+            &[&loser.id],
+            Some(&master_fields),
+            true,
+        )
         .await?;
     assert!(merge_result.success);
 
