@@ -4,7 +4,7 @@
 //!
 //! ## Currently Supported Operations
 //!
-//! - SObject CRUD operations (create, read, update, delete, describe, merge)
+//! - SObject CRUD operations (create, read, update, delete, describe)
 //!
 //! # Examples
 //!
@@ -56,9 +56,7 @@ pub mod search;
 pub use client::{Client, ClientBuilder, Error as ClientError};
 
 // SObject types
-pub use salesforce_core_restapi::types::{
-    CreateRecordResponse, MergeRequest, SObjectDescribe, SObjectField,
-};
+pub use salesforce_core_restapi::types::{CreateRecordResponse, SObjectDescribe, SObjectField};
 pub use sobject::Error as SObjectError;
 
 // Search types

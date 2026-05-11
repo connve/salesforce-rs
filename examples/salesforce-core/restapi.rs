@@ -142,50 +142,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Retrieved by external ID: {}", serde_json::to_string_pretty(&external_record)?);
     */
 
-    // Example 7: Merge two accounts into one.
-    info!("\n--- Example 7: Merging Accounts ---");
-    let merge_target = rest_client
-        .create(
-            "Account",
-            json!({
-                "Name": "Acme Duplicate",
-                "BillingCity": "New York"
-            }),
-        )
-        .await?;
-    info!("Created merge target Account: {}", merge_target.id);
+    // Example 7: Clean up - Delete the created records
+    info!("\n--- Example 7: Cleaning up ---");
 
-    // Merge the duplicate into the original, keeping the duplicate's BillingCity.
-    let mut master_fields = serde_json::Map::new();
-    master_fields.insert("BillingCity".to_string(), json!("New York"));
-
-    let merge_request = salesforce_core::restapi::MergeRequest {
-        master_record: master_fields,
-        record_ids_to_merge: vec![merge_target.id.clone()],
-    };
-
-    rest_client
-        .merge("Account", &account_id, &merge_request)
-        .await?;
-    info!("Merged {} into {}", merge_target.id, account_id);
-
-    // Verify the merge result.
-    let merged_account = rest_client
-        .get("Account", &account_id, Some("Id,Name,BillingCity"))
-        .await?;
-    info!(
-        "Merged Account: {}",
-        serde_json::to_string_pretty(&merged_account)?
-    );
-
-    // Example 8: Clean up - Delete the created records.
-    info!("\n--- Example 8: Cleaning up ---");
-
-    // Delete Contact first (it has a relationship to the Account).
+    // Delete Contact first (has relationship to Account)
     rest_client.delete("Contact", &contact_id).await?;
     info!("Deleted Contact: {}", contact_id);
 
-    // Delete Account.
+    // Delete Account
     rest_client.delete("Account", &account_id).await?;
     info!("Deleted Account: {}", account_id);
 

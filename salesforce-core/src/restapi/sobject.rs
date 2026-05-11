@@ -2,9 +2,7 @@
 
 use super::Client;
 use crate::client;
-use salesforce_core_restapi::types::{
-    CreateRecordResponse, MergeRequest, SObjectBasicInfo, SObjectDescribe,
-};
+use salesforce_core_restapi::types::{CreateRecordResponse, SObjectBasicInfo, SObjectDescribe};
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
 
@@ -509,81 +507,6 @@ impl Client {
             .map_err(|source| Error::SObjectApi { source })?;
 
         Ok(response.into_inner())
-    }
-
-    /// Merges up to three records into a single master record.
-    ///
-    /// The losing records are deleted and their related records are reparented
-    /// to the master. Field values can optionally be set on the master record
-    /// as part of the merge. Supported SObject types: Account, Contact, Lead,
-    /// and Case.
-    ///
-    /// # Arguments
-    ///
-    /// * `sobject_type` - The API name of the SObject type (Account, Contact, Lead, or Case)
-    /// * `master_record_id` - The Salesforce ID of the master (winning) record
-    /// * `request` - The merge request with optional field overrides and IDs to merge
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::restapi::{self, MergeRequest};
-    /// use serde_json::json;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
-    /// #     .build()?
-    /// #     .connect()
-    /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
-    ///
-    /// let mut master_fields = serde_json::Map::new();
-    /// master_fields.insert("Name".to_string(), json!("Acme Corporation"));
-    ///
-    /// let request = MergeRequest {
-    ///     master_record: master_fields,
-    ///     record_ids_to_merge: vec!["001xx000003DGb3AAG".to_string()],
-    /// };
-    ///
-    /// rest_client.merge("Account", "001xx000003DGb2AAG", &request).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
-    pub async fn merge(
-        &self,
-        sobject_type: impl AsRef<str>,
-        master_record_id: impl AsRef<str>,
-        request: &MergeRequest,
-    ) -> Result<(), Error> {
-        let sobject_type = sobject_type.as_ref();
-        let master_record_id = master_record_id.as_ref();
-        let http_client = self.get_http_client().await.map_err(|e| match e {
-            crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
-                source: client::Error::LockError,
-            },
-            crate::http::Error::Build { source } => Error::Communication { source },
-        })?;
-        let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
-
-        client
-            .merge_records(sobject_type, master_record_id, request)
-            .await
-            .map_err(|source| Error::SObjectApi { source })?;
-
-        Ok(())
     }
 }
 

@@ -7,8 +7,9 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ## [0.14.0] - 2026-05-11
 
 ### Added
-- `restapi::Client::merge()` — merge up to three SObject records (Account, Contact, Lead, Case) into a single master record via `PATCH /sobjects/{type}/merge/{masterRecordId}`.
-- `MergeRequest` type exported from `salesforce_core::restapi`.
+- `soapapi` module — new feature-gated module for Salesforce SOAP API operations not available through the REST API.
+- `soapapi::Client::merge()` — merge up to three SObject records (Account, Contact, Lead, Individual) into a single master record with optional field overrides.
+- `MergeResponse`, `ClientBuilder`, `Client`, `ClientError`, `MergeError` types exported from `salesforce_core::soapapi`.
 
 ### Changed
 - Release workflow now extracts changelog entries for GitHub Release notes instead of using the last commit message. Falls back to git log when no CHANGELOG.md section exists for the version.
