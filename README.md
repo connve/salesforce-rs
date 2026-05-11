@@ -17,6 +17,9 @@ Unofficial Rust SDK family for the Salesforce platform.
 ```
 salesforce-rs/
 ├── salesforce-core/           # User-facing crate for Core APIs
+│   └── src/
+│       ├── soapapi/           # SOAP-only operations
+│       └── ...
 ├── generated/
 │   └── salesforce-core/       # Auto-generated API clients
 │       ├── restapi/           # OpenAPI → progenitor
