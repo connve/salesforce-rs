@@ -57,7 +57,7 @@ jobs:
     - name: Run integration tests
       env:
         SFDC_CREDENTIALS: ${{ runner.temp }}/sfdc_credentials.json
-      run: cargo test --verbose --test auth --test restapi --test composite --test bulkapi
+      run: cargo test --verbose --test auth --test restapi --test composite --test bulkapi --test soapapi
 
   test-rust-nightly:
     runs-on: ubuntu-latest

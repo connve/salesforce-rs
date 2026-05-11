@@ -6,6 +6,7 @@
 //! - Bulk API 2.0 for high-performance query and ingest operations
 //! - REST API for SObject CRUD operations
 //! - Tooling API for metadata and Change Data Capture subscriptions
+//! - SOAP API for merge and other SOAP-only operations
 //!
 //! # Quick Start
 //!
@@ -33,7 +34,7 @@
 //! ```
 //!
 //! See module-level docs for per-API examples: [`restapi`], [`bulkapi`],
-//! [`toolingapi`], [`pubsubapi`].
+//! [`toolingapi`], [`pubsubapi`], [`soapapi`].
 //!
 //! # Cargo features
 //!
@@ -44,6 +45,7 @@
 //! - `bulkapi` — Bulk API 2.0 query and ingest jobs
 //! - `toolingapi` — Tooling API (managed event subscriptions)
 //! - `pubsubapi` — Pub/Sub API gRPC streaming (pulls in `tonic`)
+//! - `soapapi` — SOAP API for merge and other SOAP-only operations
 //! - `trace` — adds `#[tracing::instrument]` spans to client methods
 //!
 //! For a slim build, disable defaults and opt in:
@@ -97,6 +99,15 @@ pub mod restapi;
 #[cfg(feature = "toolingapi")]
 pub mod toolingapi;
 
+/// Salesforce SOAP API for operations not available through the REST API.
+#[cfg(feature = "soapapi")]
+pub mod soapapi;
+
 /// Shared HTTP client utilities.
-#[cfg(any(feature = "restapi", feature = "bulkapi", feature = "toolingapi"))]
+#[cfg(any(
+    feature = "restapi",
+    feature = "bulkapi",
+    feature = "toolingapi",
+    feature = "soapapi"
+))]
 pub(crate) mod http;

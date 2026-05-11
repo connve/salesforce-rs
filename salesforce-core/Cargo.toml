@@ -19,11 +19,12 @@ name = "salesforce_core"
 path = "src/lib.rs"
 
 [features]
-default = ["restapi", "bulkapi", "toolingapi", "pubsubapi"]
+default = ["restapi", "bulkapi", "toolingapi", "pubsubapi", "soapapi"]
 restapi = ["dep:salesforce_core_restapi"]
 bulkapi = ["dep:salesforce_core_bulkapi"]
 toolingapi = ["dep:salesforce_core_toolingapi"]
 pubsubapi = ["dep:salesforce_core_pubsubapi", "dep:tonic", "dep:futures-util"]
+soapapi = []
 trace = []
 
 [dependencies]
@@ -80,3 +81,13 @@ required-features = ["bulkapi"]
 name = "composite"
 path = "tests/composite.rs"
 required-features = ["restapi"]
+
+[[example]]
+name = "soapapi"
+path = "../examples/salesforce-core/soapapi.rs"
+required-features = ["soapapi", "restapi"]
+
+[[test]]
+name = "soapapi"
+path = "tests/soapapi.rs"
+required-features = ["soapapi", "restapi"]
