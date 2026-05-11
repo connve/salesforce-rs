@@ -18,8 +18,11 @@ Unofficial Rust SDK family for the Salesforce platform.
 salesforce-rs/
 ├── salesforce-core/           # User-facing crate for Core APIs
 │   └── src/
-│       ├── soapapi/           # SOAP-only operations
-│       └── ...
+│       ├── restapi/           # SObject CRUD, search, composite
+│       ├── bulkapi/           # Bulk 2.0 query and ingest
+│       ├── toolingapi/        # Tooling API
+│       ├── pubsubapi/         # Pub/Sub gRPC streaming
+│       └── soapapi/           # SOAP-only operations
 ├── generated/
 │   └── salesforce-core/       # Auto-generated API clients
 │       ├── restapi/           # OpenAPI → progenitor
