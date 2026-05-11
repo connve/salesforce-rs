@@ -4,6 +4,15 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.13.7] - 2026-05-11
+
+### Added
+- `restapi::Client::merge()` — merge up to three SObject records (Account, Contact, Lead, Case) into a single master record via `PATCH /sobjects/{type}/merge/{masterRecordId}`.
+- `MergeRequest` type exported from `salesforce_core::restapi`.
+
+### Changed
+- Release workflow now extracts changelog entries for GitHub Release notes instead of using the last commit message. Falls back to git log when no CHANGELOG.md section exists for the version.
+
 ## [0.13.6] - 2026-05-01
 
 ### Added

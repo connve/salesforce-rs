@@ -2,7 +2,7 @@
 
 mod common;
 
-use salesforce_core::restapi::ClientBuilder;
+use salesforce_core::restapi::{ClientBuilder, MergeRequest};
 use serde_json::json;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -99,6 +99,61 @@ async fn test_create_invalid_sobject_type() -> Result {
         .create("NonExistentObject__c", json!({"Name": "test"}))
         .await;
     assert!(result.is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_merge_accounts() -> Result {
+    skip_if_no_credentials!();
+
+    let auth = common::auth_client().await?;
+    let client = ClientBuilder::new(auth).build()?;
+
+    let master = client
+        .create(
+            "Account",
+            json!({
+                "Name": "Merge Master Account",
+                "Industry": "Technology"
+            }),
+        )
+        .await?;
+    assert!(master.success);
+
+    let loser = client
+        .create(
+            "Account",
+            json!({
+                "Name": "Merge Loser Account",
+                "BillingCity": "San Francisco"
+            }),
+        )
+        .await?;
+    assert!(loser.success);
+
+    let mut master_fields = serde_json::Map::new();
+    master_fields.insert("BillingCity".to_string(), json!("San Francisco"));
+
+    let request = MergeRequest {
+        master_record: master_fields,
+        record_ids_to_merge: vec![loser.id.clone()],
+    };
+
+    client.merge("Account", &master.id, &request).await?;
+
+    let merged = client
+        .get("Account", &master.id, Some("Id,Name,BillingCity"))
+        .await?;
+    assert_eq!(
+        merged.get("BillingCity").and_then(|v| v.as_str()),
+        Some("San Francisco")
+    );
+
+    let loser_result = client.get("Account", &loser.id, None).await;
+    assert!(loser_result.is_err());
+
+    client.delete("Account", &master.id).await?;
 
     Ok(())
 }
