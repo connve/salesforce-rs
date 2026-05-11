@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/salesforce_core.svg)](https://crates.io/crates/salesforce_core)
 [![Docs.rs](https://docs.rs/salesforce_core/badge.svg)](https://docs.rs/salesforce_core)
 
-Unofficial Rust SDK for the **Salesforce Core** (Sales Cloud, Service Cloud, Platform) APIs: REST, Bulk 2.0, Pub/Sub (gRPC), and Tooling.
+Unofficial Rust SDK for the **Salesforce Core** (Sales Cloud, Service Cloud, Platform) APIs: REST, Bulk 2.0, Pub/Sub (gRPC), Tooling, and SOAP.
 
 Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
@@ -11,7 +11,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.13"
+salesforce_core = "0.14"
 ```
 
 ## Cargo features
@@ -25,6 +25,7 @@ compile-time cost of what they use. All four are enabled by default.
 | `bulkapi`    | Bulk API 2.0 query and ingest jobs                           |
 | `toolingapi` | Tooling API (managed event subscriptions)                    |
 | `pubsubapi`  | Pub/Sub API gRPC streaming (pulls in `tonic`)                |
+| `soapapi`    | SOAP API operations (record merge)                           |
 | `trace`      | Adds `#[tracing::instrument]` spans to client methods        |
 
 For a slim build, disable defaults and opt in:
@@ -152,6 +153,12 @@ The credentials JSON file:
 | Publish Stream | ✓ |
 | Get Topic by Schema ID | ✓ |
 
+### SOAP API
+
+| Operation | Status |
+|-----------|--------|
+| Merge Records | ✓ |
+
 ### Tooling API
 
 | Operation | Status |
@@ -166,6 +173,7 @@ See the [examples directory](https://github.com/connve/salesforce-rs/tree/main/e
 - [`bulkapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/bulkapi.rs) — Query and ingest for large datasets
 - [`toolingapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/toolingapi.rs) — Managed event subscriptions
 - [`pubsubapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/pubsubapi.rs) — Platform events and CDC via gRPC
+- [`soapapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/soapapi.rs) — Record merge via SOAP API
 
 ```bash
 export SFDC_CREDENTIALS=$PWD/credentials.json
