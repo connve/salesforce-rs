@@ -10,7 +10,7 @@ Unofficial Rust SDK family for the Salesforce platform.
 
 | Crate | Product cloud |
 |-------|---------------|
-| [`salesforce_core`](https://crates.io/crates/salesforce_core) [![Crates.io](https://img.shields.io/crates/v/salesforce_core.svg)](https://crates.io/crates/salesforce_core) [![Docs.rs](https://docs.rs/salesforce_core/badge.svg)](https://docs.rs/salesforce_core) | Salesforce Core (Sales, Service, Platform) — REST, Bulk 2.0, Pub/Sub, Tooling |
+| [`salesforce_core`](https://crates.io/crates/salesforce_core) [![Crates.io](https://img.shields.io/crates/v/salesforce_core.svg)](https://crates.io/crates/salesforce_core) [![Docs.rs](https://docs.rs/salesforce_core/badge.svg)](https://docs.rs/salesforce_core) | Salesforce Core (Sales, Service, Platform) — REST, Bulk 2.0, Pub/Sub, Tooling, SOAP |
 
 ## Project layout
 
@@ -66,7 +66,7 @@ cargo run --example restapi
 Integration tests use the same `SFDC_CREDENTIALS` env var. Without it, they skip silently:
 
 ```bash
-SFDC_CREDENTIALS=$PWD/credentials.json cargo test --test auth --test restapi --test composite --test bulkapi
+SFDC_CREDENTIALS=$PWD/credentials.json cargo test --test auth --test restapi --test composite --test bulkapi --test soapapi
 ```
 
 ### Releasing
