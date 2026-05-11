@@ -5,6 +5,7 @@ mod common;
 use salesforce_core::restapi::ClientBuilder as RestClientBuilder;
 use salesforce_core::soapapi::ClientBuilder as SoapClientBuilder;
 use serde_json::json;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -16,27 +17,29 @@ async fn test_merge_accounts() -> Result {
     let rest_client = RestClientBuilder::new(auth.clone()).build()?;
     let soap_client = SoapClientBuilder::new(auth).build()?;
 
+    let suffix = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+
     let master = rest_client
         .create(
             "Account",
             json!({
-                "Name": "Merge Master Account",
+                "Name": format!("Merge Master {suffix}"),
                 "Industry": "Technology"
             }),
         )
         .await?;
     assert!(master.success);
 
-    let loser = rest_client
+    let duplicate = rest_client
         .create(
             "Account",
             json!({
-                "Name": "Merge Loser Account",
+                "Name": format!("Merge Duplicate {suffix}"),
                 "BillingCity": "San Francisco"
             }),
         )
         .await?;
-    assert!(loser.success);
+    assert!(duplicate.success);
 
     let mut master_fields = serde_json::Map::new();
     master_fields.insert("BillingCity".to_string(), json!("San Francisco"));
@@ -45,7 +48,7 @@ async fn test_merge_accounts() -> Result {
         .merge(
             "Account",
             &master.id,
-            &[&loser.id],
+            &[&duplicate.id],
             Some(&master_fields),
             true,
         )
@@ -60,8 +63,8 @@ async fn test_merge_accounts() -> Result {
         Some("San Francisco")
     );
 
-    let loser_result = rest_client.get("Account", &loser.id, None).await;
-    assert!(loser_result.is_err());
+    let duplicate_result = rest_client.get("Account", &duplicate.id, None).await;
+    assert!(duplicate_result.is_err());
 
     rest_client.delete("Account", &master.id).await?;
 
