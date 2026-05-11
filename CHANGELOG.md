@@ -4,7 +4,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.13.7] - 2026-05-11
+## [0.14.0] - 2026-05-11
 
 ### Added
 - `restapi::Client::merge()` — merge up to three SObject records (Account, Contact, Lead, Case) into a single master record via `PATCH /sobjects/{type}/merge/{masterRecordId}`.
