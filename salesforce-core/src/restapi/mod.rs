@@ -5,6 +5,7 @@
 //! ## Currently Supported Operations
 //!
 //! - SObject CRUD operations (create, read, update, delete, describe)
+//! - Flow invocation via Custom Invocable Actions
 //!
 //! # Examples
 //!
@@ -53,6 +54,9 @@ pub mod composite;
 /// SOSL search operations.
 pub mod search;
 
+/// Flow invocation via Custom Invocable Actions.
+pub mod flow;
+
 pub use client::{Client, ClientBuilder, Error as ClientError};
 
 // SObject types
@@ -62,6 +66,10 @@ pub use sobject::Error as SObjectError;
 // Search types
 pub use salesforce_core_restapi::types::{SearchRecord, SearchRecordAttributes, SearchResponse};
 pub use search::Error as SearchError;
+
+// Flow types
+pub use flow::Error as FlowError;
+pub use salesforce_core_restapi::types::{FlowInvokeRequest, FlowInvokeResponse, FlowInvokeResult};
 
 // Composite types
 pub use composite::Error as CompositeError;

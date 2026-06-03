@@ -11,7 +11,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.14"
+salesforce_core = "0.15"
 ```
 
 ## Cargo features
@@ -21,7 +21,7 @@ compile-time cost of what they use. All four are enabled by default.
 
 | Feature      | Enables                                                      |
 |--------------|--------------------------------------------------------------|
-| `restapi`    | SObject CRUD, search, composite collections (REST API)       |
+| `restapi`    | SObject CRUD, search, composite collections, flow invocation (REST API) |
 | `bulkapi`    | Bulk API 2.0 query and ingest jobs                           |
 | `toolingapi` | Tooling API (managed event subscriptions)                    |
 | `pubsubapi`  | Pub/Sub API gRPC streaming (pulls in `tonic`)                |
@@ -31,7 +31,7 @@ compile-time cost of what they use. All four are enabled by default.
 For a slim build, disable defaults and opt in:
 
 ```toml
-salesforce_core = { version = "0.13", default-features = false, features = ["restapi"] }
+salesforce_core = { version = "0.15", default-features = false, features = ["restapi"] }
 ```
 
 ## Quick start
@@ -113,6 +113,13 @@ The credentials JSON file:
 | Operation | Status |
 |-----------|--------|
 | SOSL Search | ✓ |
+
+### Custom Invocable Actions — Flow
+
+| Operation | Status |
+|-----------|--------|
+| Invoke Flow (single input) | ✓ |
+| Invoke Flow (batch / multiple inputs) | ✓ |
 
 ### Bulk API 2.0 — Query
 
