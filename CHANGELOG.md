@@ -4,6 +4,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-06-02
+
+### Added
+- `restapi::Client::invoke_flow()` — invoke an autolaunched Salesforce Flow via the Custom Invocable Actions REST endpoint (`POST /actions/custom/flow/{flowApiName}`). Accepts a single JSON object of input variables.
+- `restapi::Client::invoke_flow_batch()` — batch variant that accepts multiple sets of input variables, launching a separate flow interview per set.
+- `FlowInvokeRequest`, `FlowInvokeResponse`, `FlowInvokeResult`, `FlowError` types exported from `salesforce_core::restapi`.
+- Integration tests for flow invocation (invalid name, batch, input type validation).
+
+### Fixed
+- `client::Client::reconnect()` now writes into the existing `RwLock<TokenState>` instead of replacing the `Arc`. Previously, cloned clients (held by `restapi::Client`, `bulkapi::Client`, etc.) would keep a stale token after the original client reconnected.
+
 ## [0.14.0] - 2026-05-11
 
 ### Added

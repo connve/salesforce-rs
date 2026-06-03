@@ -82,6 +82,11 @@ name = "composite"
 path = "tests/composite.rs"
 required-features = ["restapi"]
 
+[[test]]
+name = "flow"
+path = "tests/flow.rs"
+required-features = ["restapi"]
+
 [[example]]
 name = "soapapi"
 path = "../examples/salesforce-core/soapapi.rs"

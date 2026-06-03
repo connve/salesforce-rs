@@ -746,9 +746,16 @@ impl Client {
             }
         };
 
-        // Update token state (replaces the Arc entirely since we have &mut self)
-        let token_state = TokenState::new(token_response)?;
-        self.token_state = Some(Arc::new(RwLock::new(token_state)));
+        let new_token_state = TokenState::new(token_response)?;
+        match &self.token_state {
+            Some(existing) => {
+                let mut guard = existing.write().map_err(|_| Error::LockError)?;
+                *guard = new_token_state;
+            }
+            None => {
+                self.token_state = Some(Arc::new(RwLock::new(new_token_state)));
+            }
+        }
 
         Ok(())
     }

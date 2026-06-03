@@ -518,6 +518,51 @@ components:
       items:
         $ref: '#/components/schemas/CompositeRecordResult'
 
+    # Flow Invocation Schemas
+    FlowInvokeRequest:
+      type: object
+      required:
+        - inputs
+      properties:
+        inputs:
+          type: array
+          description: |
+            Array of input variable sets for the flow. Each element launches a
+            separate flow interview. Keys must match the API names of input
+            variables marked "Available for Input" in the flow.
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: {}
+
+    FlowInvokeResult:
+      type: object
+      required:
+        - actionName
+        - isSuccess
+      properties:
+        actionName:
+          type: string
+          description: API name of the invoked flow
+        errors:
+          description: Error details (null on success)
+          nullable: true
+        isSuccess:
+          type: boolean
+          description: Whether the flow interview completed successfully
+        outputValues:
+          type: object
+          description: |
+            Output variables from the flow marked "Available for Output",
+            plus the special Flow__InterviewStatus field.
+          additionalProperties: {}
+          nullable: true
+
+    FlowInvokeResponse:
+      type: array
+      items:
+        $ref: '#/components/schemas/FlowInvokeResult'
+
     CompositeTreeRecord:
       type: object
       required:
@@ -1288,6 +1333,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /actions/custom/flow/{flowApiName}:
+    post:
+      summary: Invoke Flow
+      description: |
+        Invokes an autolaunched flow by its API name. Each element in the
+        `inputs` array launches a separate flow interview. The response
+        contains one result per interview in the same order.
+      operationId: invokeFlow
+      tags:
+        - Flow
+      parameters:
+        - name: flowApiName
+          in: path
+          required: true
+          description: The API name of the autolaunched flow
+          schema:
+            type: string
+          example: "Clone_Case_Record"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlowInvokeRequest'
+            example:
+              inputs:
+                - CaseId: "5005i000009TQe0AAG"
+                  CloneCaseTeam: true
+      responses:
+        '200':
+          description: Flow invocation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlowInvokeResponse'
+        '400':
+          description: Bad request (invalid flow inputs or flow not found)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Flow not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 tags:
   - name: SObject
     description: SObject REST API operations for CRUD operations on individual records
@@ -1295,3 +1394,5 @@ tags:
     description: Composite API for bulk operations on multiple records
   - name: Search
     description: SOSL search operations
+  - name: Flow
+    description: Flow invocation via Custom Invocable Actions
