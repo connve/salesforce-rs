@@ -29,6 +29,41 @@ pub enum Error {
     Tonic(Box<tonic::Status>),
 }
 
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    ///
+    /// gRPC status codes that indicate permanent failures —
+    /// `Cancelled`, `InvalidArgument`, `NotFound`, `AlreadyExists`,
+    /// `PermissionDenied`, `FailedPrecondition`, `OutOfRange`,
+    /// `Unimplemented`, and `Unauthenticated` — are non-retryable. All other
+    /// `Tonic` statuses (including `Unavailable`, `DeadlineExceeded`,
+    /// `ResourceExhausted`, `Aborted`, `Internal`, `DataLoss`) are
+    /// considered transient. Missing-client / missing-credential variants
+    /// are configuration errors and are never retryable.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Tonic(status) => !matches!(
+                status.code(),
+                tonic::Code::Cancelled
+                    | tonic::Code::InvalidArgument
+                    | tonic::Code::NotFound
+                    | tonic::Code::AlreadyExists
+                    | tonic::Code::PermissionDenied
+                    | tonic::Code::FailedPrecondition
+                    | tonic::Code::OutOfRange
+                    | tonic::Code::Unimplemented
+                    | tonic::Code::Unauthenticated
+            ),
+            Error::MissingClient
+            | Error::MissingTokenResponse
+            | Error::MissingInstanceUrl
+            | Error::MissingTenantId
+            | Error::InvalidMetadataValue { .. } => false,
+        }
+    }
+}
+
 struct ContextInterceptor {
     auth_header: tonic::metadata::AsciiMetadataValue,
     instance_url: tonic::metadata::AsciiMetadataValue,
@@ -970,5 +1005,46 @@ mod tests {
         assert_eq!(context.client.tenant_id.as_ref().unwrap(), &expected_tenant);
         assert!(context.client.instance_url.is_some());
         assert!(context.client.token_state.is_some());
+    }
+
+    #[test]
+    fn test_is_retryable_tonic_codes() {
+        // Non-retryable gRPC codes.
+        for code in [
+            tonic::Code::Cancelled,
+            tonic::Code::InvalidArgument,
+            tonic::Code::NotFound,
+            tonic::Code::AlreadyExists,
+            tonic::Code::PermissionDenied,
+            tonic::Code::FailedPrecondition,
+            tonic::Code::OutOfRange,
+            tonic::Code::Unimplemented,
+            tonic::Code::Unauthenticated,
+        ] {
+            let err = Error::Tonic(Box::new(tonic::Status::new(code, "test")));
+            assert!(!err.is_retryable(), "{code:?} should be non-retryable");
+        }
+
+        // Retryable gRPC codes.
+        for code in [
+            tonic::Code::Unavailable,
+            tonic::Code::DeadlineExceeded,
+            tonic::Code::ResourceExhausted,
+            tonic::Code::Aborted,
+            tonic::Code::Internal,
+            tonic::Code::DataLoss,
+            tonic::Code::Unknown,
+        ] {
+            let err = Error::Tonic(Box::new(tonic::Status::new(code, "test")));
+            assert!(err.is_retryable(), "{code:?} should be retryable");
+        }
+    }
+
+    #[test]
+    fn test_is_retryable_config_errors() {
+        assert!(!Error::MissingClient.is_retryable());
+        assert!(!Error::MissingTokenResponse.is_retryable());
+        assert!(!Error::MissingInstanceUrl.is_retryable());
+        assert!(!Error::MissingTenantId.is_retryable());
     }
 }

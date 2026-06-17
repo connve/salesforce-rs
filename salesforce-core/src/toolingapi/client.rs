@@ -54,6 +54,23 @@ pub enum Error {
     Build,
 }
 
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    ///
+    /// `ApiError` is retryable for HTTP 429 and 5xx responses. Auth and
+    /// communication errors defer to their inner types. Serialization,
+    /// missing-URL, and build errors are never retryable.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Auth { source } => source.is_retryable(),
+            Error::Communication { source } => source.is_timeout() || source.is_connect(),
+            Error::ApiError { status, .. } => *status == 429 || (500..600).contains(status),
+            Error::Serialization { .. } | Error::MissingInstanceUrl | Error::Build => false,
+        }
+    }
+}
+
 /// Client for Salesforce Tooling API operations.
 ///
 /// This client wraps the authenticated Salesforce client and provides
@@ -359,5 +376,56 @@ mod tests {
 
         assert!(matches!(error, Error::Serialization { .. }));
         assert!(std::error::Error::source(&error).is_some());
+    }
+
+    #[test]
+    fn test_is_retryable_api_status() {
+        assert!(Error::ApiError {
+            status: 429,
+            message: String::new()
+        }
+        .is_retryable());
+        assert!(Error::ApiError {
+            status: 500,
+            message: String::new()
+        }
+        .is_retryable());
+        assert!(Error::ApiError {
+            status: 503,
+            message: String::new()
+        }
+        .is_retryable());
+        assert!(!Error::ApiError {
+            status: 400,
+            message: String::new()
+        }
+        .is_retryable());
+        assert!(!Error::ApiError {
+            status: 404,
+            message: String::new()
+        }
+        .is_retryable());
+        assert!(!Error::ApiError {
+            status: 200,
+            message: String::new()
+        }
+        .is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_non_api_variants() {
+        assert!(!Error::MissingInstanceUrl.is_retryable());
+        assert!(!Error::Build.is_retryable());
+        assert!(!Error::Auth {
+            source: client::Error::MissingCredentials
+        }
+        .is_retryable());
+        assert!(Error::Auth {
+            source: client::Error::OAuth2RequestFailed {
+                status: 503,
+                body: String::new()
+            }
+        }
+        .is_retryable());
     }
 }

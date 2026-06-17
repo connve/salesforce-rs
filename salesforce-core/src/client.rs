@@ -89,6 +89,29 @@ pub enum Error {
     },
 }
 
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    ///
+    /// Only `OAuth2RequestFailed` with a 429 or 5xx status, transient
+    /// `TokenExchange` failures (connect/timeout reqwest errors), and
+    /// `HttpClientBuild` connect/timeout errors are considered retryable.
+    /// All other variants are configuration, parsing, or programmer errors
+    /// that cannot be fixed by retrying.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::OAuth2RequestFailed { status, .. } => {
+                *status == 429 || (500..600).contains(status)
+            }
+            Error::TokenExchange { source } => source
+                .downcast_ref::<reqwest::Error>()
+                .is_some_and(|e| e.is_timeout() || e.is_connect()),
+            Error::HttpClientBuild { source } => source.is_timeout() || source.is_connect(),
+            _ => false,
+        }
+    }
+}
+
 /// Type alias for Salesforce OAuth2 token response using standard fields.
 pub type SalesforceTokenResponse =
     oauth2::StandardTokenResponse<EmptyExtraTokenFields, BasicTokenType>;
@@ -1325,5 +1348,47 @@ mod tests {
         // Reconnect should fail with OAuth2RequestFailed since we have invalid credentials
         let result = client.reconnect().await;
         assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
+    }
+
+    #[test]
+    fn test_is_retryable_oauth2_status() {
+        assert!(Error::OAuth2RequestFailed {
+            status: 429,
+            body: String::new()
+        }
+        .is_retryable());
+        assert!(Error::OAuth2RequestFailed {
+            status: 503,
+            body: String::new()
+        }
+        .is_retryable());
+        assert!(Error::OAuth2RequestFailed {
+            status: 500,
+            body: String::new()
+        }
+        .is_retryable());
+        assert!(!Error::OAuth2RequestFailed {
+            status: 400,
+            body: String::new()
+        }
+        .is_retryable());
+        assert!(!Error::OAuth2RequestFailed {
+            status: 401,
+            body: String::new()
+        }
+        .is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_config_errors() {
+        assert!(!Error::MissingCredentials.is_retryable());
+        assert!(!Error::MissingClientSecret.is_retryable());
+        assert!(!Error::MissingUsername.is_retryable());
+        assert!(!Error::MissingPassword.is_retryable());
+        assert!(!Error::NoRefreshToken.is_retryable());
+        assert!(!Error::NotConnected.is_retryable());
+        assert!(!Error::LockError.is_retryable());
+        assert!(!Error::TokenExpiryOverflow.is_retryable());
+        assert!(!Error::TimeThresholdOverflow.is_retryable());
     }
 }

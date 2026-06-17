@@ -38,8 +38,54 @@ pub enum Error {
     },
 
     /// Error returned by the Salesforce SOAP API during a merge operation.
-    #[error("Merge API error: {message}")]
-    MergeApi { message: String },
+    ///
+    /// `status` is the HTTP status of the response. SOAP faults are typically
+    /// returned with a 500 status even when the underlying cause is a client
+    /// error, so callers should consult `fault_code` (when present) for the
+    /// canonical SOAP fault classification (e.g., `sf:INVALID_FIELD`,
+    /// `soapenv:Server`).
+    #[error("Merge API error (status {status}): {message}")]
+    MergeApi {
+        /// HTTP status of the SOAP response.
+        status: u16,
+        /// SOAP `<faultcode>` value, if the response contained a fault.
+        fault_code: Option<String>,
+        /// SOAP `<faultstring>` or other human-readable error message.
+        message: String,
+    },
+}
+
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    ///
+    /// Auth and communication errors defer to their inner types. `MergeApi`
+    /// errors are retryable when the HTTP status is 429 or 5xx **and** the
+    /// SOAP fault code (when present) does not indicate a permanent client
+    /// error. SOAP faults whose code starts with `sf:` (Salesforce-specific
+    /// fault classes like `INVALID_FIELD`, `MALFORMED_QUERY`) are treated as
+    /// permanent regardless of HTTP status, since they reflect a request that
+    /// will fail identically on retry.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Auth { source } => source.is_retryable(),
+            Error::Communication { source } => is_reqwest_retryable(source),
+            Error::MergeApi {
+                status, fault_code, ..
+            } => {
+                if let Some(code) = fault_code {
+                    if code.starts_with("sf:") {
+                        return false;
+                    }
+                }
+                *status == 429 || (500..600).contains(status)
+            }
+        }
+    }
+}
+
+fn is_reqwest_retryable(err: &reqwest::Error) -> bool {
+    err.is_timeout() || err.is_connect()
 }
 
 impl Client {
@@ -203,15 +249,25 @@ impl Client {
                 updated_related_ids,
             })
         } else if let Some(msg) = extract_soap_fault(&body) {
-            Err(Error::MergeApi { message: msg })
+            Err(Error::MergeApi {
+                status: status.as_u16(),
+                fault_code: extract_xml_value(&body, "faultcode"),
+                message: msg,
+            })
         } else if !status.is_success() {
             Err(Error::MergeApi {
+                status: status.as_u16(),
+                fault_code: None,
                 message: format!("SOAP request failed with HTTP status {status}"),
             })
         } else {
             let msg = extract_xml_value(&body, "message")
                 .unwrap_or_else(|| "Unknown merge error".to_string());
-            Err(Error::MergeApi { message: msg })
+            Err(Error::MergeApi {
+                status: status.as_u16(),
+                fault_code: None,
+                message: msg,
+            })
         }
     }
 }
@@ -308,5 +364,75 @@ mod tests {
     fn test_extract_soap_fault_none() {
         let xml = "<soapenv:Envelope><soapenv:Body><success>true</success></soapenv:Body></soapenv:Envelope>";
         assert_eq!(extract_soap_fault(xml), None);
+    }
+
+    #[test]
+    fn test_is_retryable_status_codes() {
+        // 5xx without fault code → retryable
+        assert!(Error::MergeApi {
+            status: 500,
+            fault_code: None,
+            message: "internal".to_string(),
+        }
+        .is_retryable());
+        assert!(Error::MergeApi {
+            status: 503,
+            fault_code: None,
+            message: "unavailable".to_string(),
+        }
+        .is_retryable());
+        // 429 → retryable
+        assert!(Error::MergeApi {
+            status: 429,
+            fault_code: None,
+            message: "throttled".to_string(),
+        }
+        .is_retryable());
+        // 4xx → not retryable
+        assert!(!Error::MergeApi {
+            status: 400,
+            fault_code: None,
+            message: "bad request".to_string(),
+        }
+        .is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_sf_fault_codes_are_permanent() {
+        // SOAP faults with `sf:` codes are permanent even on a 500.
+        assert!(!Error::MergeApi {
+            status: 500,
+            fault_code: Some("sf:INVALID_FIELD".to_string()),
+            message: "No such column".to_string(),
+        }
+        .is_retryable());
+        assert!(!Error::MergeApi {
+            status: 500,
+            fault_code: Some("sf:MALFORMED_QUERY".to_string()),
+            message: "bad query".to_string(),
+        }
+        .is_retryable());
+        // soapenv:Server on 500 (no sf: prefix) is treated as transient.
+        assert!(Error::MergeApi {
+            status: 500,
+            fault_code: Some("soapenv:Server".to_string()),
+            message: "internal".to_string(),
+        }
+        .is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_auth_proxy() {
+        assert!(!Error::Auth {
+            source: client::Error::MissingCredentials,
+        }
+        .is_retryable());
+        assert!(Error::Auth {
+            source: client::Error::OAuth2RequestFailed {
+                status: 503,
+                body: String::new(),
+            },
+        }
+        .is_retryable());
     }
 }

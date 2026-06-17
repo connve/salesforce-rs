@@ -55,6 +55,19 @@ pub enum Error {
     },
 }
 
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Auth { source } => source.is_retryable(),
+            Error::CompositeApi { source } => source.is_retryable(),
+            Error::HttpClient { source } => source.is_retryable(),
+            Error::Serde { .. } => false,
+        }
+    }
+}
+
 impl Client {
     /// Creates multiple records in a single request (up to 200 records).
     ///

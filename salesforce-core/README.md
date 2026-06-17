@@ -11,7 +11,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.15"
+salesforce_core = "0.16"
 ```
 
 ## Cargo features
@@ -31,7 +31,7 @@ compile-time cost of what they use. All four are enabled by default.
 For a slim build, disable defaults and opt in:
 
 ```toml
-salesforce_core = { version = "0.15", default-features = false, features = ["restapi"] }
+salesforce_core = { version = "0.16", default-features = false, features = ["restapi"] }
 ```
 
 ## Quick start
