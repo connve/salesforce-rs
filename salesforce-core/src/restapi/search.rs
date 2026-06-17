@@ -31,6 +31,18 @@ pub enum Error {
     },
 }
 
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Auth { source } => source.is_retryable(),
+            Error::SearchApi { source } => source.is_retryable(),
+            Error::Communication { source } => source.is_timeout() || source.is_connect(),
+        }
+    }
+}
+
 impl Client {
     /// Executes a SOSL search query.
     ///

@@ -35,6 +35,18 @@ pub enum Error {
     },
 }
 
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Auth { source } => source.is_retryable(),
+            Error::Build { source } => source.is_timeout() || source.is_connect(),
+            Error::InvalidHeader | Error::Lock => false,
+        }
+    }
+}
+
 /// Cached HTTP client paired with the token it was built for.
 #[derive(Debug)]
 pub(crate) struct CachedHttpClient {

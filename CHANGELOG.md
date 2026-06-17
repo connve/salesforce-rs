@@ -4,6 +4,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-17
+
+### Added
+- `is_retryable(&self) -> bool` method on every public `Error` enum in `salesforce_core`. Consumers (e.g. flowgen) can now collapse retry classification to a single call instead of pattern-matching on inner progenitor / tonic types. Added on: `client::Error`, `http::Error`, `pubsubapi::Error`, `toolingapi::Error`, `soapapi::merge::Error`, `restapi::search::Error`, `restapi::sobject::Error`, `restapi::composite::Error`, `restapi::flow::Error`, `bulkapi::ingest::Error`, `bulkapi::query::Error`.
+- REST wrapper enums proxy to `progenitor_client::Error::is_retryable()` (429, 502, 503, 504, and communication errors are retryable).
+- `pubsubapi::Error::is_retryable()` classifies gRPC status codes: `Cancelled`, `InvalidArgument`, `NotFound`, `AlreadyExists`, `PermissionDenied`, `FailedPrecondition`, `OutOfRange`, `Unimplemented`, and `Unauthenticated` are non-retryable; all other `Tonic` statuses are transient.
+- `toolingapi::Error::ApiError` and `client::Error::OAuth2RequestFailed` are retryable on HTTP 429 or 5xx; configuration variants (missing credentials, parse errors, etc.) are never retryable.
+- `soapapi::merge::Error::MergeApi` is retryable on 429/5xx unless the SOAP `<faultcode>` is `sf:`-prefixed (e.g. `sf:INVALID_FIELD`), which indicates a permanent client error regardless of HTTP status.
+
+### Changed
+- **Breaking:** `soapapi::merge::Error::MergeApi` variant shape changed from `{ message: String }` to `{ status: u16, fault_code: Option<String>, message: String }` so callers can distinguish transient 5xx faults from permanent SOAP faults. The merge call site now extracts `<faultcode>` alongside the existing `<faultstring>`.
+
 ## [0.15.0] - 2026-06-02
 
 ### Added

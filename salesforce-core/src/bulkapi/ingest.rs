@@ -677,6 +677,18 @@ pub enum Error {
     },
 }
 
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Auth { source } => source.is_retryable(),
+            Error::BulkApi { source } => source.is_retryable(),
+            Error::Communication { source } => source.is_timeout() || source.is_connect(),
+        }
+    }
+}
+
 fn classify_generated_error(
     err: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
 ) -> Error {
