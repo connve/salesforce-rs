@@ -11,7 +11,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.16"
+salesforce_core = "0.17"
 ```
 
 ## Cargo features
@@ -31,7 +31,7 @@ compile-time cost of what they use. All four are enabled by default.
 For a slim build, disable defaults and opt in:
 
 ```toml
-salesforce_core = { version = "0.16", default-features = false, features = ["restapi"] }
+salesforce_core = { version = "0.17", default-features = false, features = ["restapi"] }
 ```
 
 ## Quick start
@@ -54,13 +54,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rest = restapi::ClientBuilder::new(auth).build()?;
 
-    let resp = rest.create("Account", json!({ "Name": "Acme" })).await?;
-    let record = rest.get("Account", &resp.id, None).await?;
+    let resp = rest.create("Account", json!({ "Name": "Acme" })).send().await?;
+    let record = rest.get("Account", &resp.id).send().await?;
     println!("{record}");
-    rest.delete("Account", &resp.id).await?;
+    rest.delete("Account", &resp.id).send().await?;
 
     Ok(())
 }
+```
+
+## Salesforce request headers
+
+Every REST and Composite operation returns a builder that accepts custom
+Salesforce request headers via `.header(name, value)` or `.headers(map)`,
+then is dispatched with `.send().await`:
+
+```rust,no_run
+use salesforce_core::restapi;
+use serde_json::json;
+
+# async fn run(rest: restapi::Client) -> Result<(), Box<dyn std::error::Error>> {
+// Override the duplicate rule for a single create:
+let resp = rest
+    .create("Account", json!({ "Name": "Acme" }))
+    .header("Sforce-Duplicate-Rule-Header", "allowSave=true")
+    .send()
+    .await?;
+
+// Or attach several headers, e.g. on a composite update:
+# let request: salesforce_core::restapi::CompositeCollectionUpdateRequest = todo!();
+let _ = rest
+    .composite()
+    .update_records(&request)
+    .header("Sforce-Duplicate-Rule-Header", "allowSave=true")
+    .header("Sforce-Auto-Assign", "FALSE")
+    .send()
+    .await?;
+# Ok(())
+# }
+```
+
+The SDK rejects headers it manages itself (`Authorization`, `Content-Type`,
+`Accept`) at `.send()` time with `Error::InvalidHeader`.
+
+To send the same headers on every request issued by a client, configure them
+once on the builder instead:
+
+```rust,no_run
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use salesforce_core::restapi;
+
+# fn build(auth: salesforce_core::client::Client) -> Result<(), Box<dyn std::error::Error>> {
+let mut defaults = HeaderMap::new();
+defaults.insert(
+    HeaderName::from_static("sforce-call-options"),
+    HeaderValue::from_static("client=my-app"),
+);
+
+let rest = restapi::ClientBuilder::new(auth)
+    .default_headers(defaults)
+    .build()?;
+# let _ = rest;
+# Ok(())
+# }
 ```
 
 The credentials JSON file:

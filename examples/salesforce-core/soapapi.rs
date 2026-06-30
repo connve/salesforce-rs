@@ -38,6 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "Industry": "Technology"
             }),
         )
+        .send()
         .await?;
     info!("Created master Account: {}", master.id);
 
@@ -49,6 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "BillingCity": "San Francisco"
             }),
         )
+        .send()
         .await?;
     info!("Created duplicate Account: {}", duplicate.id);
 
@@ -72,13 +74,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verify the merge result.
     let merged = rest_client
-        .get("Account", &master.id, Some("Id,Name,BillingCity"))
+        .get("Account", &master.id)
+        .fields("Id,Name,BillingCity")
+        .send()
         .await?;
     info!("Merged Account: {}", serde_json::to_string_pretty(&merged)?);
 
     // Clean up.
     info!("\n--- Cleaning up ---");
-    rest_client.delete("Account", &master.id).await?;
+    rest_client.delete("Account", &master.id).send().await?;
     info!("Deleted Account: {}", master.id);
 
     Ok(())

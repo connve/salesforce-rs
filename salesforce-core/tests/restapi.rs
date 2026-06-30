@@ -22,12 +22,17 @@ async fn test_sobject_crud_cycle() -> Result {
                 "Industry": "Technology"
             }),
         )
+        .send()
         .await?;
     assert!(create_resp.success);
     assert!(!create_resp.id.is_empty());
     let id = create_resp.id.clone();
 
-    let record = client.get("Account", &id, Some("Id,Name,Industry")).await?;
+    let record = client
+        .get("Account", &id)
+        .fields("Id,Name,Industry")
+        .send()
+        .await?;
     assert_eq!(
         record.get("Name").and_then(|v| v.as_str()),
         Some("Integration Test Account")
@@ -39,17 +44,22 @@ async fn test_sobject_crud_cycle() -> Result {
 
     client
         .update("Account", &id, json!({"Industry": "Finance"}))
+        .send()
         .await?;
 
-    let updated = client.get("Account", &id, Some("Id,Industry")).await?;
+    let updated = client
+        .get("Account", &id)
+        .fields("Id,Industry")
+        .send()
+        .await?;
     assert_eq!(
         updated.get("Industry").and_then(|v| v.as_str()),
         Some("Finance")
     );
 
-    client.delete("Account", &id).await?;
+    client.delete("Account", &id).send().await?;
 
-    let get_result = client.get("Account", &id, None).await;
+    let get_result = client.get("Account", &id).send().await;
     assert!(get_result.is_err());
 
     Ok(())
@@ -62,7 +72,7 @@ async fn test_describe_account() -> Result {
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
-    let describe = client.describe("Account").await?;
+    let describe = client.describe("Account").send().await?;
 
     assert_eq!(describe.name, "Account");
     assert!(describe.queryable);
@@ -81,7 +91,7 @@ async fn test_basic_info_account() -> Result {
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
-    let info = client.basic_info("Account").await?;
+    let info = client.basic_info("Account").send().await?;
     assert_eq!(info.object_describe.name, "Account");
     assert!(info.object_describe.queryable);
 
@@ -97,6 +107,7 @@ async fn test_create_invalid_sobject_type() -> Result {
 
     let result = client
         .create("NonExistentObject__c", json!({"Name": "test"}))
+        .send()
         .await;
     assert!(result.is_err());
 
@@ -112,6 +123,7 @@ async fn test_search_sosl() -> Result {
 
     let create_resp = client
         .create("Account", json!({"Name": "SearchTestXYZ99"}))
+        .send()
         .await?;
     let id = create_resp.id.clone();
 
@@ -122,7 +134,7 @@ async fn test_search_sosl() -> Result {
         .await;
     assert!(result.is_ok());
 
-    client.delete("Account", &id).await?;
+    client.delete("Account", &id).send().await?;
 
     Ok(())
 }

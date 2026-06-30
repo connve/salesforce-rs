@@ -21,11 +21,11 @@ path = "src/lib.rs"
 [features]
 default = ["restapi", "bulkapi", "toolingapi", "pubsubapi", "soapapi"]
 restapi = ["dep:salesforce_core_restapi"]
-bulkapi = ["dep:salesforce_core_bulkapi"]
+bulkapi = ["dep:salesforce_core_bulkapi", "dep:futures-util"]
 toolingapi = ["dep:salesforce_core_toolingapi"]
 pubsubapi = ["dep:salesforce_core_pubsubapi", "dep:tonic", "dep:futures-util"]
 soapapi = []
-trace = []
+trace = ["tracing/attributes"]
 
 [dependencies]
 tokio = { workspace = true }

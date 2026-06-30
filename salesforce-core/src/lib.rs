@@ -51,7 +51,7 @@
 //! For a slim build, disable defaults and opt in:
 //!
 //! ```toml
-//! salesforce_core = { version = "0.13", default-features = false, features = ["restapi"] }
+//! salesforce_core = { version = "0.17", default-features = false, features = ["restapi"] }
 //! ```
 
 /// Default Salesforce API version (Winter '26 - API version 65.0).

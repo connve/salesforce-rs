@@ -31,13 +31,20 @@
 //!
 //! let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
 //!
-//! // Create a record
+//! // Create a record:
 //! let data = json!({
 //!     "Name": "Acme Corporation",
 //!     "Industry": "Technology"
 //! });
-//! let response = rest_client.create("Account", data).await?;
+//! let response = rest_client.create("Account", data).send().await?;
 //! let record_id = response.id;
+//!
+//! // Or attach a Salesforce request header (e.g. duplicate-rule override):
+//! let _ = rest_client
+//!     .create("Account", json!({ "Name": "Acme" }))
+//!     .header("Sforce-Duplicate-Rule-Header", "allowSave=true")
+//!     .send()
+//!     .await?;
 //! # Ok(())
 //! # }
 //! ```

@@ -1,19 +1,18 @@
 //! Composite API operations for bulk record operations.
 //!
-//! The Composite API allows you to:
-//! - Create up to 200 records in a single request
-//! - Retrieve up to 2000 records in a single request
-//! - Update up to 200 records in a single request
-//! - Upsert up to 200 records in a single request
-//! - Delete up to 200 records in a single request
-//! - Create record trees with parent-child relationships
+//! The Composite API supports up to 200 records per request (2000 for the
+//! retrieve operation). Each operation returns a request builder that accepts
+//! optional Salesforce-specific headers via `.header()` / `.headers()`, then
+//! is dispatched with `.send().await`.
 
 use super::Client;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use salesforce_core_restapi::types::{
     CompositeCollectionCreateRequest, CompositeCollectionCreateResponse,
-    CompositeCollectionRetrieveRequest, CompositeCollectionUpdateRequest,
-    CompositeCollectionUpdateResponse, CompositeCollectionUpsertRequest,
-    CompositeCollectionUpsertResponse, CompositeTreeRequest, CompositeTreeResponse,
+    CompositeCollectionDeleteResponse, CompositeCollectionRetrieveRequest,
+    CompositeCollectionUpdateRequest, CompositeCollectionUpdateResponse,
+    CompositeCollectionUpsertRequest, CompositeCollectionUpsertResponse, CompositeTreeRequest,
+    CompositeTreeResponse,
 };
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
@@ -35,7 +34,7 @@ pub enum Error {
     CompositeApi {
         /// The underlying API error.
         #[source]
-        source: GeneratedError<salesforce_core_restapi::types::ErrorResponse>,
+        source: Box<GeneratedError<salesforce_core_restapi::types::ErrorResponse>>,
     },
 
     /// Error serializing request data.
@@ -53,6 +52,15 @@ pub enum Error {
         #[source]
         source: crate::http::Error,
     },
+
+    /// A request header is either reserved by the SDK (`Authorization`,
+    /// `Content-Type`, `Accept`) or could not be converted into a valid
+    /// `HeaderName` / `HeaderValue`.
+    #[error("Invalid request header `{name}`")]
+    InvalidHeader {
+        /// The header name that was rejected.
+        name: String,
+    },
 }
 
 impl Error {
@@ -63,30 +71,273 @@ impl Error {
             Error::Auth { source } => source.is_retryable(),
             Error::CompositeApi { source } => source.is_retryable(),
             Error::HttpClient { source } => source.is_retryable(),
-            Error::Serde { .. } => false,
+            Error::Serde { .. } | Error::InvalidHeader { .. } => false,
         }
     }
 }
 
+struct HeaderBag {
+    headers: HeaderMap,
+    invalid: Option<String>,
+}
+
+impl HeaderBag {
+    fn new() -> Self {
+        Self {
+            headers: HeaderMap::new(),
+            invalid: None,
+        }
+    }
+
+    fn from_map(headers: HeaderMap) -> Self {
+        Self {
+            headers,
+            invalid: None,
+        }
+    }
+
+    fn add<N, V>(&mut self, name: N, value: V)
+    where
+        N: TryInto<HeaderName>,
+        V: TryInto<HeaderValue>,
+    {
+        if self.invalid.is_some() {
+            return;
+        }
+        match name.try_into() {
+            Err(_) => self.invalid = Some("<invalid name>".to_string()),
+            Ok(name) => match value.try_into() {
+                Err(_) => self.invalid = Some(name.as_str().to_string()),
+                Ok(value) => {
+                    self.headers.append(name, value);
+                }
+            },
+        }
+    }
+
+    fn finish(self) -> Result<HeaderMap, Error> {
+        if let Some(name) = self.invalid {
+            return Err(Error::InvalidHeader { name });
+        }
+        if let Some(name) = super::client::forbidden_header(&self.headers) {
+            return Err(Error::InvalidHeader { name });
+        }
+        Ok(self.headers)
+    }
+}
+
+async fn http_client_with(client: &Client, bag: HeaderBag) -> Result<reqwest::Client, Error> {
+    let extra = bag.finish()?;
+    client
+        .get_http_client_with_extra(&extra)
+        .await
+        .map_err(|source| Error::HttpClient { source })
+}
+
+fn generated(client: &Client, http_client: reqwest::Client) -> Result<GeneratedClient, Error> {
+    let base_url = client.base_url().map_err(|source| Error::Auth { source })?;
+    Ok(GeneratedClient::new_with_client(&base_url, http_client))
+}
+
+macro_rules! impl_header_methods {
+    () => {
+        /// Adds a single header to this request.
+        pub fn header<N, V>(mut self, name: N, value: V) -> Self
+        where
+            N: TryInto<HeaderName>,
+            V: TryInto<HeaderValue>,
+        {
+            self.headers.add(name, value);
+            self
+        }
+
+        /// Replaces all per-call headers with `headers`.
+        pub fn headers(mut self, headers: HeaderMap) -> Self {
+            self.headers = HeaderBag::from_map(headers);
+            self
+        }
+    };
+}
+
+/// Builder for [`Client::create_records`].
+#[must_use = "request builders do nothing until `.send().await` is called"]
+pub struct CreateRecords<'a> {
+    client: &'a Client,
+    request: &'a CompositeCollectionCreateRequest,
+    headers: HeaderBag,
+}
+
+impl<'a> CreateRecords<'a> {
+    impl_header_methods!();
+
+    /// Dispatches the request.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub async fn send(self) -> Result<CompositeCollectionCreateResponse, Error> {
+        let http_client = http_client_with(self.client, self.headers).await?;
+        let gen = generated(self.client, http_client)?;
+        let response =
+            gen.create_records(self.request)
+                .await
+                .map_err(|source| Error::CompositeApi {
+                    source: Box::new(source),
+                })?;
+        Ok(response.into_inner())
+    }
+}
+
+/// Builder for [`Client::get_records`].
+#[must_use = "request builders do nothing until `.send().await` is called"]
+pub struct GetRecords<'a> {
+    client: &'a Client,
+    sobject_type: String,
+    request: &'a CompositeCollectionRetrieveRequest,
+    headers: HeaderBag,
+}
+
+impl<'a> GetRecords<'a> {
+    impl_header_methods!();
+
+    /// Dispatches the request.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub async fn send(self) -> Result<Vec<serde_json::Map<String, Value>>, Error> {
+        let http_client = http_client_with(self.client, self.headers).await?;
+        let gen = generated(self.client, http_client)?;
+        let response = gen
+            .get_records(&self.sobject_type, self.request)
+            .await
+            .map_err(|source| Error::CompositeApi {
+                source: Box::new(source),
+            })?;
+        Ok(response.into_inner())
+    }
+}
+
+/// Builder for [`Client::update_records`].
+#[must_use = "request builders do nothing until `.send().await` is called"]
+pub struct UpdateRecords<'a> {
+    client: &'a Client,
+    request: &'a CompositeCollectionUpdateRequest,
+    headers: HeaderBag,
+}
+
+impl<'a> UpdateRecords<'a> {
+    impl_header_methods!();
+
+    /// Dispatches the request.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub async fn send(self) -> Result<CompositeCollectionUpdateResponse, Error> {
+        let http_client = http_client_with(self.client, self.headers).await?;
+        let gen = generated(self.client, http_client)?;
+        let response =
+            gen.update_records(self.request)
+                .await
+                .map_err(|source| Error::CompositeApi {
+                    source: Box::new(source),
+                })?;
+        Ok(response.into_inner())
+    }
+}
+
+/// Builder for [`Client::upsert_records`].
+#[must_use = "request builders do nothing until `.send().await` is called"]
+pub struct UpsertRecords<'a> {
+    client: &'a Client,
+    sobject_type: String,
+    external_id_field: String,
+    request: &'a CompositeCollectionUpsertRequest,
+    headers: HeaderBag,
+}
+
+impl<'a> UpsertRecords<'a> {
+    impl_header_methods!();
+
+    /// Dispatches the request.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub async fn send(self) -> Result<CompositeCollectionUpsertResponse, Error> {
+        let http_client = http_client_with(self.client, self.headers).await?;
+        let gen = generated(self.client, http_client)?;
+        let response = gen
+            .upsert_records(&self.sobject_type, &self.external_id_field, self.request)
+            .await
+            .map_err(|source| Error::CompositeApi {
+                source: Box::new(source),
+            })?;
+        Ok(response.into_inner())
+    }
+}
+
+/// Builder for [`Client::delete_records`].
+#[must_use = "request builders do nothing until `.send().await` is called"]
+pub struct DeleteRecords<'a> {
+    client: &'a Client,
+    ids: String,
+    all_or_none: Option<bool>,
+    headers: HeaderBag,
+}
+
+impl<'a> DeleteRecords<'a> {
+    impl_header_methods!();
+
+    /// Sets the `allOrNone` flag: if `true`, the entire request is rolled
+    /// back when any record fails to delete.
+    pub fn all_or_none(mut self, all_or_none: bool) -> Self {
+        self.all_or_none = Some(all_or_none);
+        self
+    }
+
+    /// Dispatches the request.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub async fn send(self) -> Result<CompositeCollectionDeleteResponse, Error> {
+        let http_client = http_client_with(self.client, self.headers).await?;
+        let gen = generated(self.client, http_client)?;
+        let response = gen
+            .delete_records(self.all_or_none, &self.ids)
+            .await
+            .map_err(|source| Error::CompositeApi {
+                source: Box::new(source),
+            })?;
+        Ok(response.into_inner())
+    }
+}
+
+/// Builder for [`Client::create_record_tree`].
+#[must_use = "request builders do nothing until `.send().await` is called"]
+pub struct CreateRecordTree<'a> {
+    client: &'a Client,
+    sobject_type: String,
+    request: &'a CompositeTreeRequest,
+    headers: HeaderBag,
+}
+
+impl<'a> CreateRecordTree<'a> {
+    impl_header_methods!();
+
+    /// Dispatches the request.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub async fn send(self) -> Result<CompositeTreeResponse, Error> {
+        let http_client = http_client_with(self.client, self.headers).await?;
+        let gen = generated(self.client, http_client)?;
+        let response = gen
+            .create_record_tree(&self.sobject_type, self.request)
+            .await
+            .map_err(|source| Error::CompositeApi {
+                source: Box::new(source),
+            })?;
+        Ok(response.into_inner())
+    }
+}
+
 impl Client {
-    /// Creates multiple records in a single request (up to 200 records).
-    ///
-    /// Records can be of different SObject types. Each record must include an
-    /// `attributes` object with a `type` field specifying the SObject type.
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - The create request with records and `allOrNone` flag
-    ///
-    /// # Returns
-    ///
-    /// A vector of results, one for each record in the same order as the request.
+    /// Builds a request to create multiple records in a single round-trip
+    /// (up to 200 records).
     ///
     /// # Example
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::restapi::{self, CompositeCollectionCreateRequest, CompositeRecordRequest};
+    /// use salesforce_core::restapi::{
+    ///     self, CompositeCollectionCreateRequest, CompositeRecordRequest,
+    /// };
     /// use serde_json::json;
     ///
     /// # #[tokio::main]
@@ -103,462 +354,133 @@ impl Client {
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
+    /// let rest = restapi::ClientBuilder::new(auth_client).build()?;
     ///
-    /// use salesforce_core_restapi::types::{CompositeRecordRequest, CompositeRecordRequestAttributes};
-    ///
-    /// let mut account_record = CompositeRecordRequest {
+    /// use salesforce_core_restapi::types::{
+    ///     CompositeRecordRequest, CompositeRecordRequestAttributes,
+    /// };
+    /// let mut account = CompositeRecordRequest {
     ///     attributes: CompositeRecordRequestAttributes {
     ///         type_: "Account".to_string(),
     ///         reference_id: None,
     ///     },
     ///     extra: serde_json::Map::new(),
     /// };
-    /// account_record.extra.insert("Name".to_string(), json!("Acme Corp"));
-    /// account_record.extra.insert("Industry".to_string(), json!("Technology"));
-    ///
-    /// let mut contact_record = CompositeRecordRequest {
-    ///     attributes: CompositeRecordRequestAttributes {
-    ///         type_: "Contact".to_string(),
-    ///         reference_id: None,
-    ///     },
-    ///     extra: serde_json::Map::new(),
-    /// };
-    /// contact_record.extra.insert("FirstName".to_string(), json!("John"));
-    /// contact_record.extra.insert("LastName".to_string(), json!("Doe"));
-    ///
+    /// account.extra.insert("Name".to_string(), json!("Acme"));
     /// let request = CompositeCollectionCreateRequest {
     ///     all_or_none: false,
-    ///     records: vec![account_record, contact_record],
+    ///     records: vec![account],
     /// };
     ///
-    /// let results = rest_client.composite().create_records(&request).await?;
-    /// for result in results.iter() {
-    ///     if result.success {
-    ///         if let Some(id) = &result.id {
-    ///             println!("Created record: {}", id);
-    ///         }
-    ///     }
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn create_records(
-        &self,
-        request: &CompositeCollectionCreateRequest,
-    ) -> Result<CompositeCollectionCreateResponse, Error> {
-        let http_client = self
-            .get_http_client()
-            .await
-            .map_err(|source| Error::HttpClient { source })?;
-
-        let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
-
-        let response = client
-            .create_records(request)
-            .await
-            .map_err(|source| Error::CompositeApi { source })?;
-
-        Ok(response.into_inner())
-    }
-
-    /// Retrieves multiple records by ID in a single request (up to 2000 IDs).
-    ///
-    /// All records must be of the same SObject type. You can optionally specify
-    /// which fields to retrieve for each record.
-    ///
-    /// # Arguments
-    ///
-    /// * `sobject_type` - The API name of the SObject type
-    /// * `request` - The retrieve request with IDs and optional fields
-    ///
-    /// # Returns
-    ///
-    /// A vector of records with the requested fields.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::restapi::{self, CompositeCollectionRetrieveRequest};
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://localhost".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
-    /// #     .build()?
-    /// #     .connect()
-    /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
-    ///
-    /// let request = CompositeCollectionRetrieveRequest {
-    ///     ids: vec![
-    ///         "001xx000003DGb2AAG".to_string(),
-    ///         "001xx000003DGb3AAG".to_string(),
-    ///     ],
-    ///     fields: vec!["Id".to_string(), "Name".to_string(), "Industry".to_string()],
-    /// };
-    ///
-    /// let records = rest_client.composite().get_records("Account", &request).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn get_records(
-        &self,
-        sobject_type: impl AsRef<str>,
-        request: &CompositeCollectionRetrieveRequest,
-    ) -> Result<Vec<serde_json::Map<String, Value>>, Error> {
-        let http_client = self
-            .get_http_client()
-            .await
-            .map_err(|source| Error::HttpClient { source })?;
-
-        let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
-
-        let response = client
-            .get_records(sobject_type.as_ref(), request)
-            .await
-            .map_err(|source| Error::CompositeApi { source })?;
-
-        Ok(response.into_inner())
-    }
-
-    /// Updates multiple records in a single request (up to 200 records).
-    ///
-    /// Records can be of different SObject types. Each record must include an
-    /// `attributes` object with a `type` field and an `id` field.
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - The update request with records and `allOrNone` flag
-    ///
-    /// # Returns
-    ///
-    /// A vector of results, one for each record in the same order as the request.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::restapi::{self, CompositeCollectionUpdateRequest};
-    /// use serde_json::json;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://localhost".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
-    /// #     .build()?
-    /// #     .connect()
-    /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
-    ///
-    /// use salesforce_core_restapi::types::{
-    ///     CompositeCollectionUpdateRequestRecordsItem,
-    ///     CompositeCollectionUpdateRequestRecordsItemAttributes,
-    /// };
-    ///
-    /// let mut update_record = CompositeCollectionUpdateRequestRecordsItem {
-    ///     attributes: CompositeCollectionUpdateRequestRecordsItemAttributes {
-    ///         type_: "Account".to_string(),
-    ///     },
-    ///     id: "001xx000003DGb2AAG".to_string(),
-    ///     extra: serde_json::Map::new(),
-    /// };
-    /// update_record.extra.insert("Industry".to_string(), json!("Manufacturing"));
-    ///
-    /// let request = CompositeCollectionUpdateRequest {
-    ///     all_or_none: false,
-    ///     records: vec![update_record],
-    /// };
-    ///
-    /// let results = rest_client.composite().update_records(&request).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn update_records(
-        &self,
-        request: &CompositeCollectionUpdateRequest,
-    ) -> Result<CompositeCollectionUpdateResponse, Error> {
-        let http_client = self
-            .get_http_client()
-            .await
-            .map_err(|source| Error::HttpClient { source })?;
-
-        let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
-
-        let response = client
-            .update_records(request)
-            .await
-            .map_err(|source| Error::CompositeApi { source })?;
-
-        Ok(response.into_inner())
-    }
-
-    /// Upserts multiple records in a single request (up to 200 records).
-    ///
-    /// Creates new records or updates existing records based on an external ID field.
-    /// All records must be of the same SObject type.
-    ///
-    /// # Arguments
-    ///
-    /// * `sobject_type` - The API name of the SObject type
-    /// * `external_id_field` - The API name of the external ID field
-    /// * `request` - The upsert request with records and `allOrNone` flag
-    ///
-    /// # Returns
-    ///
-    /// A vector of results indicating whether each record was created or updated.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::restapi::{self, CompositeCollectionUpsertRequest};
-    /// use serde_json::json;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://localhost".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
-    /// #     .build()?
-    /// #     .connect()
-    /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
-    ///
-    /// use salesforce_core_restapi::types::{
-    ///     CompositeCollectionUpsertRequestRecordsItem,
-    ///     CompositeCollectionUpsertRequestRecordsItemAttributes,
-    /// };
-    ///
-    /// let mut upsert_record = CompositeCollectionUpsertRequestRecordsItem {
-    ///     attributes: CompositeCollectionUpsertRequestRecordsItemAttributes {
-    ///         type_: "Account".to_string(),
-    ///     },
-    ///     extra: serde_json::Map::new(),
-    /// };
-    /// upsert_record.extra.insert("ExternalId__c".to_string(), json!("EXT-001"));
-    /// upsert_record.extra.insert("Name".to_string(), json!("Acme Corp"));
-    ///
-    /// let request = CompositeCollectionUpsertRequest {
-    ///     all_or_none: false,
-    ///     records: vec![upsert_record],
-    /// };
-    ///
-    /// let results = rest_client
+    /// let results = rest
     ///     .composite()
-    ///     .upsert_records("Account", "ExternalId__c", &request)
+    ///     .create_records(&request)
+    ///     .header("Sforce-Duplicate-Rule-Header", "allowSave=true")
+    ///     .send()
     ///     .await?;
-    ///
-    /// for result in results.iter() {
-    ///     if result.success {
-    ///         if let Some(id) = &result.id {
-    ///             if result.created {
-    ///                 println!("Created record: {}", id);
-    ///             } else {
-    ///                 println!("Updated record: {}", id);
-    ///             }
-    ///         }
-    ///     }
-    /// }
+    /// # let _ = results;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn upsert_records(
-        &self,
-        sobject_type: impl AsRef<str>,
-        external_id_field: impl AsRef<str>,
-        request: &CompositeCollectionUpsertRequest,
-    ) -> Result<CompositeCollectionUpsertResponse, Error> {
-        let http_client = self
-            .get_http_client()
-            .await
-            .map_err(|source| Error::HttpClient { source })?;
-
-        let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
-
-        let response = client
-            .upsert_records(sobject_type.as_ref(), external_id_field.as_ref(), request)
-            .await
-            .map_err(|source| Error::CompositeApi { source })?;
-
-        Ok(response.into_inner())
+    pub fn create_records<'a>(
+        &'a self,
+        request: &'a CompositeCollectionCreateRequest,
+    ) -> CreateRecords<'a> {
+        CreateRecords {
+            client: self,
+            request,
+            headers: HeaderBag::new(),
+        }
     }
 
-    /// Deletes multiple records in a single request (up to 200 records).
-    ///
-    /// All records must be of the same SObject type.
-    ///
-    /// # Arguments
-    ///
-    /// * `ids` - Comma-separated list of record IDs to delete
-    /// * `all_or_none` - If true, rolls back entire request if any record fails
-    ///
-    /// # Returns
-    ///
-    /// A vector of results, one for each record in the same order as the IDs.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::restapi;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://localhost".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
-    /// #     .build()?
-    /// #     .connect()
-    /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
-    ///
-    /// let ids = "001xx000003DGb2AAG,001xx000003DGb3AAG";
-    /// let results = rest_client.composite().delete_records(ids, Some(false)).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn delete_records(
-        &self,
-        ids: impl AsRef<str>,
-        all_or_none: Option<bool>,
-    ) -> Result<salesforce_core_restapi::types::CompositeCollectionDeleteResponse, Error> {
-        let http_client = self
-            .get_http_client()
-            .await
-            .map_err(|source| Error::HttpClient { source })?;
-
-        let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
-
-        let response = client
-            .delete_records(all_or_none, ids.as_ref())
-            .await
-            .map_err(|source| Error::CompositeApi { source })?;
-
-        Ok(response.into_inner())
+    /// Builds a request to retrieve multiple records by ID (up to 2000).
+    pub fn get_records<'a>(
+        &'a self,
+        sobject_type: impl Into<String>,
+        request: &'a CompositeCollectionRetrieveRequest,
+    ) -> GetRecords<'a> {
+        GetRecords {
+            client: self,
+            sobject_type: sobject_type.into(),
+            request,
+            headers: HeaderBag::new(),
+        }
     }
 
-    /// Creates a tree of records with parent-child relationships in a single request.
-    ///
-    /// Up to 200 records total can be created across all levels of the tree.
-    /// Each record must have a unique `referenceId` in its `attributes` object.
-    ///
-    /// # Arguments
-    ///
-    /// * `sobject_type` - The API name of the parent SObject type
-    /// * `request` - The tree request with nested records
-    ///
-    /// # Returns
-    ///
-    /// A response indicating which records were created successfully.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
-    /// use salesforce_core::restapi::{self, CompositeTreeRequest};
-    /// use serde_json::json;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://localhost".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
-    /// #     .build()?
-    /// #     .connect()
-    /// #     .await?;
-    /// let rest_client = restapi::ClientBuilder::new(auth_client).build()?;
-    ///
-    /// use salesforce_core_restapi::types::{CompositeTreeRecord, CompositeTreeRecordAttributes};
-    ///
-    /// let mut account_tree = CompositeTreeRecord {
-    ///     attributes: CompositeTreeRecordAttributes {
-    ///         type_: "Account".to_string(),
-    ///         reference_id: "ref1".to_string(),
-    ///     },
-    ///     extra: serde_json::Map::new(),
-    /// };
-    /// account_tree.extra.insert("Name".to_string(), json!("Acme Corp"));
-    /// account_tree.extra.insert("Contacts".to_string(), json!({
-    ///     "records": [
-    ///         {
-    ///             "attributes": {
-    ///                 "type": "Contact",
-    ///                 "referenceId": "ref2"
-    ///             },
-    ///             "FirstName": "John",
-    ///             "LastName": "Doe"
-    ///         }
-    ///     ]
-    /// }));
-    ///
-    /// let request = CompositeTreeRequest {
-    ///     records: vec![account_tree],
-    /// };
-    ///
-    /// let response = rest_client.composite().create_record_tree("Account", &request).await?;
-    /// if !response.has_errors {
-    ///     println!("All records created successfully");
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn create_record_tree(
-        &self,
-        sobject_type: impl AsRef<str>,
-        request: &CompositeTreeRequest,
-    ) -> Result<CompositeTreeResponse, Error> {
-        let http_client = self
-            .get_http_client()
-            .await
-            .map_err(|source| Error::HttpClient { source })?;
+    /// Builds a request to update multiple records (up to 200).
+    pub fn update_records<'a>(
+        &'a self,
+        request: &'a CompositeCollectionUpdateRequest,
+    ) -> UpdateRecords<'a> {
+        UpdateRecords {
+            client: self,
+            request,
+            headers: HeaderBag::new(),
+        }
+    }
 
-        let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+    /// Builds a request to upsert multiple records by external ID (up to 200).
+    pub fn upsert_records<'a>(
+        &'a self,
+        sobject_type: impl Into<String>,
+        external_id_field: impl Into<String>,
+        request: &'a CompositeCollectionUpsertRequest,
+    ) -> UpsertRecords<'a> {
+        UpsertRecords {
+            client: self,
+            sobject_type: sobject_type.into(),
+            external_id_field: external_id_field.into(),
+            request,
+            headers: HeaderBag::new(),
+        }
+    }
 
-        let response = client
-            .create_record_tree(sobject_type.as_ref(), request)
-            .await
-            .map_err(|source| Error::CompositeApi { source })?;
+    /// Builds a request to delete multiple records (up to 200) by
+    /// comma-separated ID list.
+    pub fn delete_records(&self, ids: impl Into<String>) -> DeleteRecords<'_> {
+        DeleteRecords {
+            client: self,
+            ids: ids.into(),
+            all_or_none: None,
+            headers: HeaderBag::new(),
+        }
+    }
 
-        Ok(response.into_inner())
+    /// Builds a request to create a tree of related records (up to 200 across
+    /// all levels).
+    pub fn create_record_tree<'a>(
+        &'a self,
+        sobject_type: impl Into<String>,
+        request: &'a CompositeTreeRequest,
+    ) -> CreateRecordTree<'a> {
+        CreateRecordTree {
+            client: self,
+            sobject_type: sobject_type.into(),
+            request,
+            headers: HeaderBag::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_header_bag_rejects_forbidden() {
+        let mut bag = HeaderBag::new();
+        bag.add("Authorization", "Bearer x");
+        assert!(matches!(
+            bag.finish(),
+            Err(Error::InvalidHeader { ref name }) if name == "authorization"
+        ));
+    }
+
+    #[test]
+    fn test_header_bag_accepts_sforce_headers() {
+        let mut bag = HeaderBag::new();
+        bag.add("Sforce-Duplicate-Rule-Header", "allowSave=true");
+        let map = bag.finish().expect("valid headers");
+        assert_eq!(map.len(), 1);
     }
 }
