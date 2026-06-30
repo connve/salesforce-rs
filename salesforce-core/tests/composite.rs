@@ -26,8 +26,11 @@ async fn cleanup(client: &salesforce_core::restapi::Client, ids: &[String]) -> R
     if ids.is_empty() {
         return Ok(());
     }
-    let id_str = ids.join(",");
-    client.delete_records(&id_str, Some(false)).await?;
+    client
+        .delete_records(ids.join(","))
+        .all_or_none(false)
+        .send()
+        .await?;
     Ok(())
 }
 
@@ -52,13 +55,17 @@ async fn test_composite_create_and_delete() -> Result {
         records,
     };
 
-    let results = client.create_records(&create_request).await?;
+    let results = client.create_records(&create_request).send().await?;
     assert_eq!(results.len(), 3);
 
     let ids = extract_ids(&results);
     assert_eq!(ids.len(), 3);
 
-    let delete_results = client.delete_records(&ids.join(","), Some(false)).await?;
+    let delete_results = client
+        .delete_records(ids.join(","))
+        .all_or_none(false)
+        .send()
+        .await?;
     assert_eq!(delete_results.len(), 3);
     for r in delete_results.iter() {
         assert!(r.success);
@@ -88,7 +95,7 @@ async fn test_composite_update() -> Result {
         all_or_none: true,
         records,
     };
-    let created = client.create_records(&create_request).await?;
+    let created = client.create_records(&create_request).send().await?;
     let ids = extract_ids(&created);
     assert_eq!(ids.len(), 2);
 
@@ -102,19 +109,19 @@ async fn test_composite_update() -> Result {
             {"attributes": {"type": "Account"}, "id": id1, "Industry": "Healthcare"}
         ]
     }))?;
-    let update_results = client.update_records(&update_request).await?;
+    let update_results = client.update_records(&update_request).send().await?;
     assert_eq!(update_results.len(), 2);
     for r in update_results.iter() {
         assert!(r.success);
     }
 
-    let acc0 = client.get("Account", id0, Some("Industry")).await?;
+    let acc0 = client.get("Account", id0).fields("Industry").send().await?;
     assert_eq!(
         acc0.get("Industry").and_then(|v| v.as_str()),
         Some("Finance")
     );
 
-    let acc1 = client.get("Account", id1, Some("Industry")).await?;
+    let acc1 = client.get("Account", id1).fields("Industry").send().await?;
     assert_eq!(
         acc1.get("Industry").and_then(|v| v.as_str()),
         Some("Healthcare")
@@ -145,14 +152,17 @@ async fn test_composite_retrieve() -> Result {
         all_or_none: true,
         records,
     };
-    let created = client.create_records(&create_request).await?;
+    let created = client.create_records(&create_request).send().await?;
     let ids = extract_ids(&created);
 
     let retrieve_request = CompositeCollectionRetrieveRequest {
         ids: ids.clone(),
         fields: vec!["Id".to_string(), "Name".to_string()],
     };
-    let retrieved = client.get_records("Account", &retrieve_request).await?;
+    let retrieved = client
+        .get_records("Account", &retrieve_request)
+        .send()
+        .await?;
     assert_eq!(retrieved.len(), 2);
 
     cleanup(&client, &ids).await?;
@@ -180,7 +190,10 @@ async fn test_composite_tree_create() -> Result {
         }]
     }))?;
 
-    let result = client.create_record_tree("Account", &tree_request).await?;
+    let result = client
+        .create_record_tree("Account", &tree_request)
+        .send()
+        .await?;
     assert!(!result.has_errors);
     assert!(result.results.len() >= 2);
 
@@ -199,8 +212,8 @@ async fn test_composite_tree_create() -> Result {
         .map(|r| r.id.clone())
         .ok_or("missing account reference in tree response")?;
 
-    client.delete("Contact", &contact_id).await?;
-    client.delete("Account", &account_id).await?;
+    client.delete("Contact", &contact_id).send().await?;
+    client.delete("Account", &account_id).send().await?;
 
     Ok(())
 }

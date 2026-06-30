@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "NumberOfEmployees": 500
     });
 
-    let create_response = rest_client.create("Account", account_data).await?;
+    let create_response = rest_client.create("Account", account_data).send().await?;
     info!(
         "Created Account with ID: {} (success: {})",
         create_response.id, create_response.success
@@ -51,7 +51,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 2: Read the created record
     info!("\n--- Example 2: Reading Account by ID ---");
     let account = rest_client
-        .get("Account", &account_id, Some("Id,Name,Industry,BillingCity"))
+        .get("Account", &account_id)
+        .fields("Id,Name,Industry,BillingCity")
+        .send()
         .await?;
     info!(
         "Retrieved Account: {}",
@@ -68,16 +70,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     rest_client
         .update("Account", &account_id, update_data)
+        .send()
         .await?;
     info!("Account updated successfully");
 
     // Read the updated record to verify
     let updated_account = rest_client
-        .get(
-            "Account",
-            &account_id,
-            Some("Id,Name,Industry,NumberOfEmployees,Description"),
-        )
+        .get("Account", &account_id)
+        .fields("Id,Name,Industry,NumberOfEmployees,Description")
+        .send()
         .await?;
     info!(
         "Updated Account: {}",
@@ -86,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 4a: Get SObject basic info (lightweight, returns recently viewed records)
     info!("\n--- Example 4a: Account basic info ---");
-    let info_resp = rest_client.basic_info("Account").await?;
+    let info_resp = rest_client.basic_info("Account").send().await?;
     info!(
         "Account basic info: queryable={}, recent items={}",
         info_resp.object_describe.queryable,
@@ -95,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 4b: Describe SObject metadata (full field-level metadata)
     info!("\n--- Example 4b: Describing Account SObject ---");
-    let describe = rest_client.describe("Account").await?;
+    let describe = rest_client.describe("Account").send().await?;
     info!("Account metadata:");
     info!("  - Name: {}", describe.name);
     info!("  - Label: {}", describe.label);
@@ -120,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Title": "VP of Engineering"
     });
 
-    let create_response = rest_client.create("Contact", contact_data).await?;
+    let create_response = rest_client.create("Contact", contact_data).send().await?;
     info!(
         "Created Contact with ID: {} (success: {})",
         create_response.id, create_response.success
@@ -132,12 +133,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /*
     info!("\n--- Example 6: Reading by External ID ---");
     let external_record = rest_client
-        .get_by_external_id(
-            "Account",
-            "ExternalId__c",
-            "EXT-12345",
-            Some("Id,Name,ExternalId__c")
-        )
+        .get_by_external_id("Account", "ExternalId__c", "EXT-12345")
+        .fields("Id,Name,ExternalId__c")
+        .send()
         .await?;
     info!("Retrieved by external ID: {}", serde_json::to_string_pretty(&external_record)?);
     */
@@ -146,11 +144,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n--- Example 7: Cleaning up ---");
 
     // Delete Contact first (has relationship to Account)
-    rest_client.delete("Contact", &contact_id).await?;
+    rest_client.delete("Contact", &contact_id).send().await?;
     info!("Deleted Contact: {}", contact_id);
 
     // Delete Account
-    rest_client.delete("Account", &account_id).await?;
+    rest_client.delete("Account", &account_id).send().await?;
     info!("Deleted Account: {}", account_id);
 
     info!("\n✓ All REST API examples completed successfully!");

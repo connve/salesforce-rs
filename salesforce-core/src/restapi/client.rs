@@ -1,10 +1,29 @@
 //! REST API client wrapper.
 
 use crate::client;
+use reqwest::header::{HeaderMap, HeaderName, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::{DEFAULT_API_VERSION, DEFAULT_CONNECT_TIMEOUT_SECS, DEFAULT_REQUEST_TIMEOUT_SECS};
+
+/// Headers that callers must not set via `default_headers` or per-call overrides.
+///
+/// `Authorization` is owned by the auth client and `Content-Type`/`Accept` are
+/// controlled by the generated API client per endpoint. Allowing overrides
+/// would silently break requests.
+const FORBIDDEN_HEADERS: &[HeaderName] = &[AUTHORIZATION, CONTENT_TYPE, ACCEPT];
+
+/// Returns the first reserved header name in `headers`, if any.
+pub(crate) fn forbidden_header(headers: &HeaderMap) -> Option<String> {
+    headers.keys().find_map(|name| {
+        if FORBIDDEN_HEADERS.iter().any(|f| f == name) {
+            Some(name.as_str().to_string())
+        } else {
+            None
+        }
+    })
+}
 
 /// Client for Salesforce REST API operations.
 ///
@@ -16,6 +35,7 @@ pub struct Client {
     pub(crate) api_version: String,
     pub(crate) connect_timeout: Duration,
     pub(crate) request_timeout: Duration,
+    pub(crate) default_headers: HeaderMap,
     pub(crate) http_cache: Arc<crate::http::HttpClientCache>,
 }
 
@@ -30,6 +50,26 @@ pub enum Error {
         #[source]
         source: reqwest::Error,
     },
+
+    /// A header supplied via `default_headers` is reserved by the SDK and
+    /// cannot be overridden.
+    #[error("Header `{name}` is managed by the SDK and cannot be overridden")]
+    InvalidHeader {
+        /// The reserved header name that was rejected.
+        name: String,
+    },
+}
+
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    ///
+    /// Builder errors reflect configuration problems and are never retryable.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::HttpClient { .. } | Error::InvalidHeader { .. } => false,
+        }
+    }
 }
 
 /// Builder for creating a REST API client.
@@ -38,6 +78,7 @@ pub struct ClientBuilder {
     api_version: Option<String>,
     connect_timeout: Option<Duration>,
     request_timeout: Option<Duration>,
+    default_headers: HeaderMap,
 }
 
 impl ClientBuilder {
@@ -78,6 +119,7 @@ impl ClientBuilder {
             api_version: None,
             connect_timeout: None,
             request_timeout: None,
+            default_headers: HeaderMap::new(),
         }
     }
 
@@ -117,12 +159,64 @@ impl ClientBuilder {
         self
     }
 
+    /// Sets default HTTP headers to send on every request issued through this
+    /// client.
+    ///
+    /// Useful for Salesforce-specific request headers such as
+    /// `Sforce-Duplicate-Rule-Header`, `Sforce-Auto-Assign`, or
+    /// `Sforce-Call-Options`.
+    ///
+    /// Headers managed by the SDK (`Authorization`, `Content-Type`, `Accept`)
+    /// are rejected at [`build`](Self::build) time.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+    /// use salesforce_core::client::{self, Credentials};
+    /// use salesforce_core::restapi;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let auth_client = client::Builder::new()
+    /// #     .credentials(Credentials {
+    /// #         client_id: "...".to_string(),
+    /// #         client_secret: Some("...".to_string()),
+    /// #         username: None,
+    /// #         password: None,
+    /// #         instance_url: "https://localhost".to_string(),
+    /// #         tenant_id: "...".to_string(),
+    /// #     })
+    /// #     .build()?
+    /// #     .connect()
+    /// #     .await?;
+    /// let mut headers = HeaderMap::new();
+    /// headers.insert(
+    ///     HeaderName::from_static("sforce-duplicate-rule-header"),
+    ///     HeaderValue::from_static("allowSave=true"),
+    /// );
+    ///
+    /// let rest_client = restapi::ClientBuilder::new(auth_client)
+    ///     .default_headers(headers)
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn default_headers(mut self, headers: HeaderMap) -> Self {
+        self.default_headers = headers;
+        self
+    }
+
     /// Builds the REST API client.
     ///
     /// # Errors
     ///
     /// Returns an error if the HTTP client cannot be built.
     pub fn build(self) -> Result<Client, Error> {
+        if let Some(name) = forbidden_header(&self.default_headers) {
+            return Err(Error::InvalidHeader { name });
+        }
+
         Ok(Client {
             auth_client: Arc::new(self.auth_client),
             api_version: self
@@ -134,6 +228,7 @@ impl ClientBuilder {
             request_timeout: self
                 .request_timeout
                 .unwrap_or_else(|| Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS)),
+            default_headers: self.default_headers,
             http_cache: Arc::new(crate::http::HttpClientCache::new()),
         })
     }
@@ -177,18 +272,50 @@ impl Client {
         self.request_timeout
     }
 
-    /// Gets an HTTP client with authentication headers for API requests.
+    /// Gets an HTTP client with authentication and client-level default
+    /// headers for API requests.
     ///
-    /// Returns a cached client when the token hasn't changed, reusing
-    /// TCP connections and TLS sessions for better performance.
+    /// Returns a cached client when the token and headers haven't changed,
+    /// reusing TCP connections and TLS sessions for better performance.
     pub(crate) async fn get_http_client(&self) -> Result<reqwest::Client, crate::http::Error> {
         self.http_cache
             .get(
                 self.auth_client.as_ref(),
                 self.connect_timeout(),
                 self.request_timeout(),
+                &self.default_headers,
             )
             .await
+    }
+
+    /// Builds a fresh (uncached) HTTP client whose default headers are the
+    /// client-level headers merged with `per_call`.
+    ///
+    /// Used by request builders that attach per-call Salesforce headers (for
+    /// example `Sforce-Duplicate-Rule-Header`) without mutating the long-lived
+    /// cached client. Callers are responsible for validating `per_call`
+    /// against [`forbidden_header`] before invoking.
+    pub(crate) async fn get_http_client_with_extra(
+        &self,
+        per_call: &HeaderMap,
+    ) -> Result<reqwest::Client, crate::http::Error> {
+        let token = self
+            .auth_client
+            .access_token()
+            .await
+            .map_err(|source| crate::http::Error::Auth { source })?;
+
+        let mut merged = self.default_headers.clone();
+        for (name, value) in per_call.iter() {
+            merged.append(name.clone(), value.clone());
+        }
+
+        crate::http::build_http_client(
+            &token,
+            self.connect_timeout(),
+            self.request_timeout(),
+            &merged,
+        )
     }
 
     /// Access SObject CRUD operations.
@@ -207,5 +334,46 @@ impl Client {
     /// A reference to the client itself, which implements all Composite operations.
     pub fn composite(&self) -> &Self {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::header::HeaderValue;
+
+    #[test]
+    fn test_forbidden_header_rejects_authorization() {
+        let mut h = HeaderMap::new();
+        h.insert(AUTHORIZATION, HeaderValue::from_static("Bearer x"));
+        assert_eq!(forbidden_header(&h).as_deref(), Some("authorization"));
+    }
+
+    #[test]
+    fn test_forbidden_header_rejects_content_type() {
+        let mut h = HeaderMap::new();
+        h.insert(CONTENT_TYPE, HeaderValue::from_static("text/plain"));
+        assert_eq!(forbidden_header(&h).as_deref(), Some("content-type"));
+    }
+
+    #[test]
+    fn test_forbidden_header_rejects_accept() {
+        let mut h = HeaderMap::new();
+        h.insert(ACCEPT, HeaderValue::from_static("application/xml"));
+        assert_eq!(forbidden_header(&h).as_deref(), Some("accept"));
+    }
+
+    #[test]
+    fn test_forbidden_header_accepts_sforce_headers() {
+        let mut h = HeaderMap::new();
+        h.insert(
+            HeaderName::from_static("sforce-duplicate-rule-header"),
+            HeaderValue::from_static("allowSave=true"),
+        );
+        h.insert(
+            HeaderName::from_static("sforce-auto-assign"),
+            HeaderValue::from_static("FALSE"),
+        );
+        assert!(forbidden_header(&h).is_none());
     }
 }

@@ -4,6 +4,28 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-29
+
+### Added
+- Per-call Salesforce request headers on every REST and Composite operation via a reqwest-style request builder. Each method now returns a dedicated builder type that supports `.header(name, value)` / `.headers(map)` and is dispatched with `.send().await`. This unblocks `Sforce-Duplicate-Rule-Header: allowSave=true` and any other Salesforce request header (`Sforce-Auto-Assign`, `Sforce-Call-Options`, `Sforce-Mru`, …).
+  - `restapi::sobject::{Create, Get, GetByExternalId, Update, Delete, Describe, BasicInfo}`
+  - `restapi::composite::{CreateRecords, GetRecords, UpdateRecords, UpsertRecords, DeleteRecords, CreateRecordTree}`
+- `restapi::ClientBuilder::default_headers(HeaderMap)` — set Salesforce headers once per client; per-call headers merge on top.
+- `is_retryable()` on the three remaining public `Error` enums missed by 0.16.0: `restapi::client::Error`, `bulkapi::client::Error`, `soapapi::client::Error`. All three are builder/config errors and report `false`. Closes the §6 (AGENTS.md) uniformity gap.
+- `restapi::sobject::Error::InvalidHeader { name }` and `restapi::composite::Error::InvalidHeader { name }` surface reserved-name or invalid-value rejections at `.send()` time.
+
+### Changed
+- **Breaking:** `restapi::sobject` and `restapi::composite` operations now return a builder instead of being directly `await`able. Migration is mechanical:
+  - `rest.create("Account", data).await?` → `rest.create("Account", data).send().await?`
+  - `rest.get("Account", id, Some("Id,Name"))` → `rest.get("Account", id).fields("Id,Name").send()`
+  - `rest.delete_records(ids, Some(false))` → `rest.delete_records(ids).all_or_none(false).send()`
+- `http::Error` is now `#[non_exhaustive]`. The module is `pub(crate)`, so this is not a downstream-visible change.
+- HTTP client cache key extended with a stable hash over the client-level header set; cached clients are reused only when both the bearer token and the configured default headers are unchanged.
+- `restapi::sobject::Error::SObjectApi` and `restapi::composite::Error::CompositeApi` now box their `GeneratedError` source to keep the enums small (clippy `result_large_err`).
+- The `trace` feature now activates `tracing/attributes`, so `--features trace` builds work in any feature combination (previously slim builds without `pubsubapi` failed to find `tracing::instrument`).
+- `#[cfg_attr(feature = "trace", tracing::instrument(skip_all))]` is now applied uniformly to every public async method across `restapi`, `bulkapi`, `pubsubapi`, `soapapi`, `toolingapi`, and `client`.
+- The `bulkapi` feature now activates `futures-util` (previously gated only behind `pubsubapi`). Consumers of `bulkapi::ByteStream` need `StreamExt` to drive the stream, so a `--features bulkapi` build now compiles standalone — including the example.
+
 ## [0.16.0] - 2026-06-17
 
 ### Added

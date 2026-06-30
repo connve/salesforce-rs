@@ -86,6 +86,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn search(&self, sosl_query: impl AsRef<str>) -> Result<SearchResponse, Error> {
         let sosl_query = sosl_query.as_ref();
         let http_client = self.get_http_client().await.map_err(|e| match e {

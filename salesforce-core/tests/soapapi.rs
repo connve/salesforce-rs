@@ -27,6 +27,7 @@ async fn test_merge_accounts() -> Result {
                 "Industry": "Technology"
             }),
         )
+        .send()
         .await?;
     assert!(master.success);
 
@@ -38,6 +39,7 @@ async fn test_merge_accounts() -> Result {
                 "BillingCity": "San Francisco"
             }),
         )
+        .send()
         .await?;
     assert!(duplicate.success);
 
@@ -56,17 +58,19 @@ async fn test_merge_accounts() -> Result {
     assert!(merge_result.success);
 
     let merged = rest_client
-        .get("Account", &master.id, Some("Id,Name,BillingCity"))
+        .get("Account", &master.id)
+        .fields("Id,Name,BillingCity")
+        .send()
         .await?;
     assert_eq!(
         merged.get("BillingCity").and_then(|v| v.as_str()),
         Some("San Francisco")
     );
 
-    let duplicate_result = rest_client.get("Account", &duplicate.id, None).await;
+    let duplicate_result = rest_client.get("Account", &duplicate.id).send().await;
     assert!(duplicate_result.is_err());
 
-    rest_client.delete("Account", &master.id).await?;
+    rest_client.delete("Account", &master.id).send().await?;
 
     Ok(())
 }

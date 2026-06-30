@@ -68,6 +68,18 @@ pub enum Error {
     Build,
 }
 
+impl Error {
+    /// Returns `true` if the error is transient and the operation could
+    /// succeed if retried.
+    ///
+    /// Builder errors reflect configuration problems and are never retryable.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Build => false,
+        }
+    }
+}
+
 /// Builder for creating a Bulk API client.
 #[derive(Debug)]
 pub struct ClientBuilder {
@@ -410,6 +422,7 @@ impl Client {
                 self.auth_client.as_ref(),
                 self.connect_timeout(),
                 self.request_timeout(),
+                &reqwest::header::HeaderMap::new(),
             )
             .await
     }

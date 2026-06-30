@@ -237,6 +237,7 @@ impl Client {
                 self.auth_client.as_ref(),
                 self.connect_timeout(),
                 self.request_timeout(),
+                &reqwest::header::HeaderMap::new(),
             )
             .await
             .map_err(|e| match e {
@@ -301,6 +302,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn create_managed_event_subscription(
         &self,
         request: CreateManagedEventSubscriptionRequest,
