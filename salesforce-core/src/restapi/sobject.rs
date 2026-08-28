@@ -7,8 +7,11 @@
 
 use super::Client;
 use crate::client;
+use chrono::{DateTime, Utc};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use salesforce_core_restapi::types::{CreateRecordResponse, SObjectBasicInfo, SObjectDescribe};
+use salesforce_core_restapi::types::{
+    CreateRecordResponse, GetDeletedRecordsResponse, SObjectBasicInfo, SObjectDescribe,
+};
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
 
@@ -461,6 +464,48 @@ impl<'a> BasicInfo<'a> {
     }
 }
 
+/// Builder for [`Client::get_deleted`].
+#[must_use = "request builders do nothing until `.send().await` is called"]
+pub struct GetDeleted<'a> {
+    client: &'a Client,
+    sobject_type: String,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+    headers: HeaderBag,
+}
+
+impl<'a> GetDeleted<'a> {
+    /// Adds a single header to this request.
+    pub fn header<N, V>(mut self, name: N, value: V) -> Self
+    where
+        N: TryInto<HeaderName>,
+        V: TryInto<HeaderValue>,
+    {
+        self.headers.add(name, value);
+        self
+    }
+
+    /// Replaces all per-call headers with `headers`.
+    pub fn headers(mut self, headers: HeaderMap) -> Self {
+        self.headers = HeaderBag::from_map(headers);
+        self
+    }
+
+    /// Dispatches the request.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub async fn send(self) -> Result<GetDeletedRecordsResponse, Error> {
+        let http_client = http_client_with(self.client, self.headers).await?;
+        let gen = generated(self.client, http_client)?;
+        let response = gen
+            .get_deleted_records(&self.sobject_type, &self.end, &self.start)
+            .await
+            .map_err(|source| Error::SObjectApi {
+                source: Box::new(source),
+            })?;
+        Ok(response.into_inner())
+    }
+}
+
 impl Client {
     /// Builds a request to create a new record of the specified SObject type.
     ///
@@ -587,6 +632,58 @@ impl Client {
         BasicInfo {
             client: self,
             sobject_type: sobject_type.into(),
+            headers: HeaderBag::new(),
+        }
+    }
+
+    /// Builds a request to retrieve the IDs and deletion datetimes of records
+    /// of the specified SObject type that were deleted within `[start, end)`.
+    ///
+    /// The window must be at most 30 days long and `end` cannot be in the future.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use chrono::{Duration, Utc};
+    /// use salesforce_core::client::{self, Credentials};
+    /// use salesforce_core::restapi;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let auth_client = client::Builder::new()
+    /// #     .credentials(Credentials {
+    /// #         client_id: "...".to_string(),
+    /// #         client_secret: Some("...".to_string()),
+    /// #         username: None,
+    /// #         password: None,
+    /// #         instance_url: "https://localhost".to_string(),
+    /// #         tenant_id: "...".to_string(),
+    /// #     })
+    /// #     .build()?
+    /// #     .connect()
+    /// #     .await?;
+    /// let rest = restapi::ClientBuilder::new(auth_client).build()?;
+    ///
+    /// let end = Utc::now();
+    /// let start = end - Duration::days(1);
+    /// let deleted = rest.get_deleted("Account", start, end).send().await?;
+    /// for record in &deleted.deleted_records {
+    ///     println!("{} deleted at {}", record.id, record.deleted_date);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_deleted(
+        &self,
+        sobject_type: impl Into<String>,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> GetDeleted<'_> {
+        GetDeleted {
+            client: self,
+            sobject_type: sobject_type.into(),
+            start,
+            end,
             headers: HeaderBag::new(),
         }
     }

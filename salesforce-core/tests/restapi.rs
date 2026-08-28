@@ -138,3 +138,27 @@ async fn test_search_sosl() -> Result {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_get_deleted_records() -> Result {
+    skip_if_no_credentials!();
+
+    let auth = common::auth_client().await?;
+    let client = ClientBuilder::new(auth).build()?;
+
+    let create_resp = client
+        .create("Account", json!({"Name": "DeleteApiTestXYZ98"}))
+        .send()
+        .await?;
+    let id = create_resp.id.clone();
+    client.delete("Account", &id).send().await?;
+
+    // Deleted-record replication is asynchronous, so the record may not appear
+    // in the window yet; this validates the endpoint is wired up correctly.
+    let end = chrono::Utc::now();
+    let start = end - chrono::Duration::days(1);
+    let result = client.get_deleted("Account", start, end).send().await;
+    assert!(result.is_ok());
+
+    Ok(())
+}
