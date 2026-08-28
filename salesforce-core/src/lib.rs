@@ -1,3 +1,8 @@
+// The `GeneratedError` types wrapped by the public Error enums are large
+// enough to trip `result_large_err` on newer clippy releases. Boxing them
+// would change the public API, so the lint is allowed crate-wide instead.
+#![allow(clippy::result_large_err)]
+
 //! Unofficial Rust SDK for the Salesforce API.
 //!
 //! This crate provides comprehensive support for Salesforce APIs including:

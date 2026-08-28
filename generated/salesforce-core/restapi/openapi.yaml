@@ -150,6 +150,43 @@ components:
           items:
             $ref: '#/components/schemas/Error'
 
+    DeletedRecord:
+      type: object
+      required:
+        - id
+        - deletedDate
+      properties:
+        id:
+          type: string
+          description: Salesforce ID of the deleted record
+          example: "003xx000004Tb9xAAS"
+        deletedDate:
+          type: string
+          format: date-time
+          description: Datetime when the record was deleted
+          example: "2014-02-14T00:53:26.000+0000"
+
+    GetDeletedRecordsResponse:
+      type: object
+      required:
+        - deletedRecords
+        - earliestDateAvailable
+        - latestDateCovered
+      properties:
+        deletedRecords:
+          type: array
+          description: Deleted records within the requested time window
+          items:
+            $ref: '#/components/schemas/DeletedRecord'
+        earliestDateAvailable:
+          type: string
+          format: date-time
+          description: Earliest datetime for which deleted-record data is available
+        latestDateCovered:
+          type: string
+          format: date-time
+          description: Latest datetime covered by the deleted-record data
+
     SObjectField:
       type: object
       required:
@@ -913,6 +950,76 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /sobjects/{sObjectType}/deleted:
+    get:
+      summary: Get Deleted Records
+      description: |
+        Retrieves the IDs and deletion datetimes of records of the specified
+        SObject type that were deleted within the given time window. The window
+        must be at most 30 days long, and `end` cannot be in the future.
+      operationId: getDeletedRecords
+      tags:
+        - SObject
+      parameters:
+        - name: sObjectType
+          in: path
+          required: true
+          description: The API name of the SObject type
+          schema:
+            type: string
+          example: "Account"
+        - name: start
+          in: query
+          required: true
+          description: |
+            Start datetime of the deletion window (ISO 8601 format), for example
+            "2014-02-01T00:00:00+00:00".
+          schema:
+            type: string
+            format: date-time
+          example: "2014-02-01T00:00:00+00:00"
+        - name: end
+          in: query
+          required: true
+          description: |
+            End datetime of the deletion window (ISO 8601 format). Must be
+            later than `start` and no more than 30 days after it.
+          schema:
+            type: string
+            format: date-time
+          example: "2014-02-14T00:00:00+00:00"
+      responses:
+        '200':
+          description: Deleted records retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetDeletedRecordsResponse'
+        '400':
+          description: Bad request (invalid time window)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (insufficient permissions to view deleted records)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: SObject type not found
           content:
             application/json:
               schema:

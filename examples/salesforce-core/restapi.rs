@@ -7,6 +7,7 @@
 //! - Updating records
 //! - Deleting records
 //! - Describing SObject metadata
+//! - Getting records deleted within a time window
 
 use salesforce_core::client;
 use salesforce_core::restapi::ClientBuilder;
@@ -19,9 +20,38 @@ use tracing::info;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let credentials_path = PathBuf::from(env::var("SFDC_CREDENTIALS")?);
+    // Credentials path can be passed as `--credentials <path>` or via the
+    // SFDC_CREDENTIALS environment variable.
+    let mut credentials_path = env::var("SFDC_CREDENTIALS").ok();
+    let mut section = None;
+
+    let mut args = env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--credentials" => match args.next() {
+                Some(path) => credentials_path = Some(path),
+                None => {
+                    eprintln!("Missing path for --credentials");
+                    std::process::exit(1);
+                }
+            },
+            "deleted" => section = Some("deleted".to_string()),
+            other => {
+                eprintln!("Unknown argument: {other}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    let credentials_path = credentials_path.ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "SFDC_CREDENTIALS env var or --credentials path required",
+        )
+    })?;
+
     let auth_client = client::Builder::new()
-        .credentials_path(credentials_path)
+        .credentials_path(PathBuf::from(credentials_path))
         .build()?
         .connect()
         .await?;
@@ -30,6 +60,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rest_client = ClientBuilder::new(auth_client).build()?;
 
     info!("REST API client initialized successfully");
+
+    // Run only one example when a section name is given, e.g. `deleted`
+    if section.as_deref() == Some("deleted") {
+        get_deleted_example(&rest_client).await?;
+        return Ok(());
+    }
 
     // Example 1: Create a new Account record
     info!("\n--- Example 1: Creating a new Account ---");
@@ -151,7 +187,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rest_client.delete("Account", &account_id).send().await?;
     info!("Deleted Account: {}", account_id);
 
+    // Example 8: Get records deleted within a time window.
+    // Deleted-record data replication is asynchronous, so records deleted just
+    // now may not appear until later.
+    info!("\n--- Example 8: Getting deleted Account records ---");
+    let end = chrono::Utc::now();
+    let start = end - chrono::Duration::days(1);
+    let deleted = rest_client
+        .get_deleted("Account", start, end)
+        .send()
+        .await?;
+    info!(
+        "Deleted Account records: earliest={}, latest={}, count={}",
+        deleted.earliest_date_available,
+        deleted.latest_date_covered,
+        deleted.deleted_records.len()
+    );
+    for record in &deleted.deleted_records {
+        info!("  - {} deleted at {}", record.id, record.deleted_date);
+    }
+
     info!("\n✓ All REST API examples completed successfully!");
+
+    Ok(())
+}
+
+/// Runs only the "get deleted records" example.
+async fn get_deleted_example(
+    rest_client: &salesforce_core::restapi::Client,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Get records deleted within the last 24 hours.
+    // Deleted-record data replication is asynchronous, so recently deleted
+    // records may not appear until later.
+    info!("\n--- Example 8: Getting deleted Account records ---");
+    let end = chrono::Utc::now();
+    let start = end - chrono::Duration::days(1);
+    let deleted = rest_client
+        .get_deleted("Account", start, end)
+        .send()
+        .await?;
+    info!(
+        "Deleted Account records: earliest={}, latest={}, count={}",
+        deleted.earliest_date_available,
+        deleted.latest_date_covered,
+        deleted.deleted_records.len()
+    );
+    for record in &deleted.deleted_records {
+        info!("  - {} deleted at {}", record.id, record.deleted_date);
+    }
 
     Ok(())
 }
