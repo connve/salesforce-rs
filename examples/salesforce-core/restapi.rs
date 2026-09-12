@@ -9,6 +9,7 @@
 //! - Describing SObject metadata
 //! - Getting records deleted within a time window
 
+use salesforce_core::chrono::{Duration, Utc};
 use salesforce_core::client;
 use salesforce_core::restapi::ClientBuilder;
 use serde_json::json;
@@ -187,27 +188,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     rest_client.delete("Account", &account_id).send().await?;
     info!("Deleted Account: {}", account_id);
 
-    // Example 8: Get records deleted within a time window.
-    // Deleted-record data replication is asynchronous, so records deleted just
-    // now may not appear until later.
-    info!("\n--- Example 8: Getting deleted Account records ---");
-    let end = chrono::Utc::now();
-    let start = end - chrono::Duration::days(1);
-    let deleted = rest_client
-        .get_deleted("Account", start, end)
-        .send()
-        .await?;
-    info!(
-        "Deleted Account records: earliest={}, latest={}, count={}",
-        deleted.earliest_date_available,
-        deleted.latest_date_covered,
-        deleted.deleted_records.len()
-    );
-    for record in &deleted.deleted_records {
-        info!("  - {} deleted at {}", record.id, record.deleted_date);
-    }
+    get_deleted_example(&rest_client).await?;
 
-    info!("\n✓ All REST API examples completed successfully!");
+    info!("\nAll REST API examples completed successfully.");
 
     Ok(())
 }
@@ -220,10 +203,10 @@ async fn get_deleted_example(
     // Deleted-record data replication is asynchronous, so recently deleted
     // records may not appear until later.
     info!("\n--- Example 8: Getting deleted Account records ---");
-    let end = chrono::Utc::now();
-    let start = end - chrono::Duration::days(1);
+    let end = Utc::now();
+    let start = end - Duration::days(1);
     let deleted = rest_client
-        .get_deleted("Account", start, end)
+        .get_deleted("Account", start..end)
         .send()
         .await?;
     info!(

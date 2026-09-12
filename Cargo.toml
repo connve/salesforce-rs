@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.17.0"
+version = "0.18.0"
 authors = ["CONNVE"]
 license = "MPL-2.0"
 edition = "2021"
@@ -23,11 +23,19 @@ keywords = ["salesforce", "sdk", "api", "oauth2", "grpc"]
 categories = ["api-bindings", "asynchronous"]
 publish = true
 
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+# Suppressions must use `#[expect(lint, reason = "...")]`, which clippy reports
+# as unfulfilled once the underlying lint stops firing. A plain `#[allow]`
+# stays silent forever, so an obsolete suppression is never noticed.
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+
 [workspace.dependencies]
-salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "0.17.0" }
-salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "0.17.0" }
-salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "0.17.0" }
-salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "0.17.0" }
+salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "0.18.0" }
+salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "0.18.0" }
+salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "0.18.0" }
+salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "0.18.0" }
 tokio = { version = "1.48", default-features = false, features = [
     "macros",
     "rt-multi-thread",

@@ -661,7 +661,7 @@ pub enum Error {
     #[error("Bulk API error: {source}")]
     BulkApi {
         #[source]
-        source: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
+        source: Box<GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>>,
     },
 
     /// Network-level communication failure.
@@ -696,7 +696,9 @@ fn classify_generated_error(
         GeneratedError::CommunicationError(source)
         | GeneratedError::InvalidUpgrade(source)
         | GeneratedError::ResponseBodyError(source) => Error::Communication { source },
-        other => Error::BulkApi { source: other },
+        other => Error::BulkApi {
+            source: Box::new(other),
+        },
     }
 }
 

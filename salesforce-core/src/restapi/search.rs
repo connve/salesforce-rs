@@ -20,7 +20,7 @@ pub enum Error {
     #[error("Search API error: {source}")]
     SearchApi {
         #[source]
-        source: GeneratedError<salesforce_core_restapi::types::ErrorResponse>,
+        source: Box<GeneratedError<salesforce_core_restapi::types::ErrorResponse>>,
     },
 
     /// Network-level communication failure.
@@ -102,7 +102,9 @@ impl Client {
         let response = client
             .search(sosl_query)
             .await
-            .map_err(|source| Error::SearchApi { source })?;
+            .map_err(|source| Error::SearchApi {
+                source: Box::new(source),
+            })?;
 
         Ok(response.into_inner())
     }

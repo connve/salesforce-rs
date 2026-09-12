@@ -373,7 +373,6 @@ pub enum CredentialsFrom {
 /// # }
 /// ```
 #[derive(Debug, Clone)]
-#[allow(clippy::type_complexity)]
 pub struct Client {
     /// Source of credentials (file path or direct value).
     credentials_from: CredentialsFrom,

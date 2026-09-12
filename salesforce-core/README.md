@@ -11,7 +11,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.17"
+salesforce_core = "0.18"
 ```
 
 ## Cargo features
@@ -31,7 +31,18 @@ compile-time cost of what they use. All four are enabled by default.
 For a slim build, disable defaults and opt in:
 
 ```toml
-salesforce_core = { version = "0.17", default-features = false, features = ["restapi"] }
+salesforce_core = { version = "0.18", default-features = false, features = ["restapi"] }
+```
+
+`chrono` appears in the public API — operations taking a time window accept
+`DateTime<Utc>`. It is re-exported as `salesforce_core::chrono`, so use that
+rather than adding `chrono` to your own dependencies:
+
+```rust
+use salesforce_core::chrono::{Duration, Utc};
+
+let end = Utc::now();
+let deleted = rest.get_deleted("Account", (end - Duration::days(1))..end).send().await?;
 ```
 
 ## Quick start
@@ -136,97 +147,98 @@ The credentials JSON file:
 
 | Feature | Status |
 |---------|--------|
-| OAuth2 Client Credentials Flow | ✓ |
-| OAuth2 Username-Password Flow | ✓ |
-| Automatic Token Refresh | ✓ |
-| Session Reconnection | ✓ |
+| OAuth2 Client Credentials Flow | Supported |
+| OAuth2 Username-Password Flow | Supported |
+| Automatic Token Refresh | Supported |
+| Session Reconnection | Supported |
 
 ### SObject REST API
 
 | Operation | Status |
 |-----------|--------|
-| Create Record | ✓ |
-| Get Record | ✓ |
-| Get Record by External ID | ✓ |
-| Update Record | ✓ |
-| Delete Record | ✓ |
-| Get SObject Basic Info | ✓ |
-| Describe SObject | ✓ |
+| Create Record | Supported |
+| Get Record | Supported |
+| Get Record by External ID | Supported |
+| Update Record | Supported |
+| Delete Record | Supported |
+| Get Deleted Records | Supported |
+| Get SObject Basic Info | Supported |
+| Describe SObject | Supported |
 
 ### Composite REST API
 
 | Operation | Status |
 |-----------|--------|
-| Create Records (batch) | ✓ |
-| Update Records (batch) | ✓ |
-| Delete Records (batch) | ✓ |
-| Retrieve Records (batch) | ✓ |
-| Upsert Records (batch) | ✓ |
-| Create Record Tree | ✓ |
+| Create Records (batch) | Supported |
+| Update Records (batch) | Supported |
+| Delete Records (batch) | Supported |
+| Retrieve Records (batch) | Supported |
+| Upsert Records (batch) | Supported |
+| Create Record Tree | Supported |
 
 ### Search
 
 | Operation | Status |
 |-----------|--------|
-| SOSL Search | ✓ |
+| SOSL Search | Supported |
 
 ### Custom Invocable Actions — Flow
 
 | Operation | Status |
 |-----------|--------|
-| Invoke Flow (single input) | ✓ |
-| Invoke Flow (batch / multiple inputs) | ✓ |
+| Invoke Flow (single input) | Supported |
+| Invoke Flow (batch / multiple inputs) | Supported |
 
 ### Bulk API 2.0 — Query
 
 | Operation | Status |
 |-----------|--------|
-| Create Query Job | ✓ |
-| Get Query Job Info | ✓ |
-| Get Query Results | ✓ |
-| Get Query Result Pages | ✓ |
-| Get All Query Jobs | ✓ |
-| Abort Query Job | ✓ |
-| Delete Query Job | ✓ |
+| Create Query Job | Supported |
+| Get Query Job Info | Supported |
+| Get Query Results | Supported |
+| Get Query Result Pages | Supported |
+| Get All Query Jobs | Supported |
+| Abort Query Job | Supported |
+| Delete Query Job | Supported |
 
 ### Bulk API 2.0 — Ingest
 
 | Operation | Status |
 |-----------|--------|
-| Create Ingest Job | ✓ |
-| Get Ingest Job Info | ✓ |
-| Upload Job Data | ✓ |
-| Mark Upload Complete | ✓ |
-| Get Successful Results | ✓ |
-| Get Failed Results | ✓ |
-| Get Unprocessed Results | ✓ |
-| Get All Ingest Jobs | ✓ |
-| Abort Ingest Job | ✓ |
-| Delete Ingest Job | ✓ |
+| Create Ingest Job | Supported |
+| Get Ingest Job Info | Supported |
+| Upload Job Data | Supported |
+| Mark Upload Complete | Supported |
+| Get Successful Results | Supported |
+| Get Failed Results | Supported |
+| Get Unprocessed Results | Supported |
+| Get All Ingest Jobs | Supported |
+| Abort Ingest Job | Supported |
+| Delete Ingest Job | Supported |
 
 ### Pub/Sub API (gRPC)
 
 | Operation | Status |
 |-----------|--------|
-| Get Topic | ✓ |
-| Get Schema | ✓ |
-| Subscribe | ✓ |
-| Managed Subscribe | ✓ |
-| Publish | ✓ |
-| Publish Stream | ✓ |
-| Get Topic by Schema ID | ✓ |
+| Get Topic | Supported |
+| Get Schema | Supported |
+| Subscribe | Supported |
+| Managed Subscribe | Supported |
+| Publish | Supported |
+| Publish Stream | Supported |
+| Get Topic by Schema ID | Supported |
 
 ### SOAP API
 
 | Operation | Status |
 |-----------|--------|
-| Merge Records | ✓ |
+| Merge Records | Supported |
 
 ### Tooling API
 
 | Operation | Status |
 |-----------|--------|
-| Create Managed Event Subscription | ✓ |
+| Create Managed Event Subscription | Supported |
 
 ## Examples
 

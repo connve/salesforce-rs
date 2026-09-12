@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
     {
         Ok(response) => {
-            info!("✓ Successfully created ManagedEventSubscription!");
+            info!("Successfully created ManagedEventSubscription!");
             info!("  - ID: {}", response.id);
             info!("  - Success: {}", response.success);
             if !response.errors.is_empty() {
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
     {
         Ok(response) => {
-            info!("✓ Successfully created ManagedEventSubscription!");
+            info!("Successfully created ManagedEventSubscription!");
             info!("  - ID: {}", response.id);
             info!("  - Success: {}", response.success);
             if !response.errors.is_empty() {
@@ -120,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
     {
         Ok(response) => {
-            info!("✓ Successfully created ManagedEventSubscription (paused)!");
+            info!("Successfully created ManagedEventSubscription (paused)!");
             info!("  - ID: {}", response.id);
             info!("  - Success: {}", response.success);
             info!("  - Note: This subscription is in STOP state and won't receive events");
@@ -155,7 +155,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("");
     info!("Error Recovery Replay determines where to resume after an error.");
 
-    info!("\n✓ Tooling API examples completed successfully!");
+    info!("\nTooling API examples completed successfully!");
     info!("\nNote: To clean up, delete these subscriptions via Salesforce Setup UI:");
     info!("  Setup → Platform Events → Event Manager → Subscriptions");
 

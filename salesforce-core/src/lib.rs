@@ -1,8 +1,3 @@
-// The `GeneratedError` types wrapped by the public Error enums are large
-// enough to trip `result_large_err` on newer clippy releases. Boxing them
-// would change the public API, so the lint is allowed crate-wide instead.
-#![allow(clippy::result_large_err)]
-
 //! Unofficial Rust SDK for the Salesforce API.
 //!
 //! This crate provides comprehensive support for Salesforce APIs including:
@@ -56,8 +51,28 @@
 //! For a slim build, disable defaults and opt in:
 //!
 //! ```toml
-//! salesforce_core = { version = "0.17", default-features = false, features = ["restapi"] }
+//! salesforce_core = { version = "0.18", default-features = false, features = ["restapi"] }
 //! ```
+
+/// Re-export of [`chrono`], which appears in this crate's public API.
+///
+/// Operations taking a time window accept `chrono` types, so depend on this
+/// re-export rather than adding `chrono` separately — that keeps the version in
+/// step with the one the SDK was built against.
+///
+/// ```
+/// use salesforce_core::chrono::{Duration, Utc};
+///
+/// let end = Utc::now();
+/// let window = (end - Duration::days(1))..end;
+/// # let _ = window;
+/// ```
+#[cfg_attr(
+    feature = "restapi",
+    doc = "",
+    doc = "[`restapi::Client::get_deleted`] is one such operation."
+)]
+pub use chrono;
 
 /// Default Salesforce API version (Winter '26 - API version 65.0).
 pub const DEFAULT_API_VERSION: &str = "65.0";

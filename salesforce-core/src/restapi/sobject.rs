@@ -14,6 +14,7 @@ use salesforce_core_restapi::types::{
 };
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
+use std::ops::Range;
 
 /// Error type for SObject operations.
 #[derive(thiserror::Error, Debug)]
@@ -49,6 +50,16 @@ pub enum Error {
     /// `HeaderName` / `HeaderValue`.
     #[error("Invalid request header `{name}`")]
     InvalidHeader { name: String },
+
+    /// The requested time window ends at or before it starts. Salesforce
+    /// rejects such a window, so it is caught before the request is sent.
+    #[error("Time window must end after it starts, got start={start} end={end}")]
+    InvalidTimeWindow {
+        /// Inclusive start of the rejected window.
+        start: DateTime<Utc>,
+        /// Exclusive end of the rejected window.
+        end: DateTime<Utc>,
+    },
 }
 
 impl Error {
@@ -59,7 +70,9 @@ impl Error {
             Error::Auth { source } => source.is_retryable(),
             Error::SObjectApi { source } => source.is_retryable(),
             Error::Communication { source } => source.is_timeout() || source.is_connect(),
-            Error::InvalidDataType { .. } | Error::InvalidHeader { .. } => false,
+            Error::InvalidDataType { .. }
+            | Error::InvalidHeader { .. }
+            | Error::InvalidTimeWindow { .. } => false,
         }
     }
 }
@@ -72,6 +85,17 @@ fn require_object(data: Value) -> Result<serde_json::Map<String, Value>, Error> 
         Value::Number(_) => Err(unexpected("number")),
         Value::String(_) => Err(unexpected("string")),
         Value::Array(_) => Err(unexpected("array")),
+    }
+}
+
+fn require_ordered_window(window: &Range<DateTime<Utc>>) -> Result<(), Error> {
+    if window.end > window.start {
+        Ok(())
+    } else {
+        Err(Error::InvalidTimeWindow {
+            start: window.start,
+            end: window.end,
+        })
     }
 }
 
@@ -469,8 +493,7 @@ impl<'a> BasicInfo<'a> {
 pub struct GetDeleted<'a> {
     client: &'a Client,
     sobject_type: String,
-    start: DateTime<Utc>,
-    end: DateTime<Utc>,
+    window: Range<DateTime<Utc>>,
     headers: HeaderBag,
 }
 
@@ -492,12 +515,18 @@ impl<'a> GetDeleted<'a> {
     }
 
     /// Dispatches the request.
+    ///
+    /// Returns [`Error::InvalidTimeWindow`] without contacting Salesforce if
+    /// the window is empty, i.e. its end is not after its start.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<GetDeletedRecordsResponse, Error> {
+        require_ordered_window(&self.window)?;
         let http_client = http_client_with(self.client, self.headers).await?;
         let gen = generated(self.client, http_client)?;
+        // The generated signature orders query parameters alphabetically, so
+        // `end` precedes `start`.
         let response = gen
-            .get_deleted_records(&self.sobject_type, &self.end, &self.start)
+            .get_deleted_records(&self.sobject_type, &self.window.end, &self.window.start)
             .await
             .map_err(|source| Error::SObjectApi {
                 source: Box::new(source),
@@ -637,14 +666,33 @@ impl Client {
     }
 
     /// Builds a request to retrieve the IDs and deletion datetimes of records
-    /// of the specified SObject type that were deleted within `[start, end)`.
+    /// of the specified SObject type that were deleted within `window`.
     ///
-    /// The window must be at most 30 days long and `end` cannot be in the future.
+    /// The window is half-open, matching `Range` semantics: `start..end` covers
+    /// deletions at or after `start` and strictly before `end`. An empty window
+    /// (one whose end is not after its start) is rejected by
+    /// [`GetDeleted::send`] as [`Error::InvalidTimeWindow`] without issuing a
+    /// request.
+    ///
+    /// Salesforce enforces the remaining constraints server-side, and they are
+    /// deliberately not replicated here because they vary by org and over time:
+    ///
+    /// - Deleted records are only visible while they remain in the Recycle Bin:
+    ///   15 days by default, which an org can extend to 30. A `start` earlier
+    ///   than the org's retention window is rejected with
+    ///   `INVALID_REPLICATION_DATE`.
+    /// - A window covering 600,000 or more deleted records is rejected with
+    ///   `EXCEEDED_ID_LIMIT`; retry over a shorter window.
+    /// - `end` cannot be in the future.
+    ///
+    /// The response's `earliest_date_available` reports how far back the org
+    /// actually goes, so prefer reading it over hardcoding a retention figure.
+    /// All three surface as [`Error::SObjectApi`].
     ///
     /// # Example
     ///
     /// ```no_run
-    /// use chrono::{Duration, Utc};
+    /// use salesforce_core::chrono::{Duration, Utc};
     /// use salesforce_core::client::{self, Credentials};
     /// use salesforce_core::restapi;
     ///
@@ -666,7 +714,7 @@ impl Client {
     ///
     /// let end = Utc::now();
     /// let start = end - Duration::days(1);
-    /// let deleted = rest.get_deleted("Account", start, end).send().await?;
+    /// let deleted = rest.get_deleted("Account", start..end).send().await?;
     /// for record in &deleted.deleted_records {
     ///     println!("{} deleted at {}", record.id, record.deleted_date);
     /// }
@@ -676,14 +724,12 @@ impl Client {
     pub fn get_deleted(
         &self,
         sobject_type: impl Into<String>,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
+        window: Range<DateTime<Utc>>,
     ) -> GetDeleted<'_> {
         GetDeleted {
             client: self,
             sobject_type: sobject_type.into(),
-            start,
-            end,
+            window,
             headers: HeaderBag::new(),
         }
     }
@@ -698,6 +744,32 @@ mod tests {
         let auth_error = client::Error::LockError;
         let error = Error::Auth { source: auth_error };
         assert!(std::error::Error::source(&error).is_some());
+    }
+
+    #[test]
+    fn test_window_rejects_end_before_start() {
+        let end = Utc::now();
+        let start = end + chrono::Duration::days(1);
+        assert!(matches!(
+            require_ordered_window(&(start..end)),
+            Err(Error::InvalidTimeWindow { .. })
+        ));
+    }
+
+    #[test]
+    fn test_window_rejects_zero_length() {
+        let at = Utc::now();
+        assert!(matches!(
+            require_ordered_window(&(at..at)),
+            Err(Error::InvalidTimeWindow { .. })
+        ));
+    }
+
+    #[test]
+    fn test_window_accepts_ordered_range() {
+        let end = Utc::now();
+        let start = end - chrono::Duration::days(1);
+        assert!(require_ordered_window(&(start..end)).is_ok());
     }
 
     #[test]

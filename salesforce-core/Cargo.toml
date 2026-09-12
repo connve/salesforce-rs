@@ -18,6 +18,9 @@ publish.workspace = true
 name = "salesforce_core"
 path = "src/lib.rs"
 
+[lints]
+workspace = true
+
 [features]
 default = ["restapi", "bulkapi", "toolingapi", "pubsubapi", "soapapi"]
 restapi = ["dep:salesforce_core_restapi"]

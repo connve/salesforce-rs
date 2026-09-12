@@ -153,12 +153,18 @@ async fn test_get_deleted_records() -> Result {
     let id = create_resp.id.clone();
     client.delete("Account", &id).send().await?;
 
-    // Deleted-record replication is asynchronous, so the record may not appear
-    // in the window yet; this validates the endpoint is wired up correctly.
-    let end = chrono::Utc::now();
-    let start = end - chrono::Duration::days(1);
-    let result = client.get_deleted("Account", start, end).send().await;
-    assert!(result.is_ok());
+    // Deleted-record replication is asynchronous, so the record deleted above
+    // may not appear in the window yet. Assert on what the endpoint guarantees
+    // regardless of timing rather than on the record showing up.
+    let end = salesforce_core::chrono::Utc::now();
+    let start = end - salesforce_core::chrono::Duration::days(1);
+    let deleted = client.get_deleted("Account", start..end).send().await?;
+
+    assert!(deleted.earliest_date_available <= deleted.latest_date_covered);
+    for record in &deleted.deleted_records {
+        assert!(!record.id.is_empty());
+        assert!(record.deleted_date >= deleted.earliest_date_available);
+    }
 
     Ok(())
 }
