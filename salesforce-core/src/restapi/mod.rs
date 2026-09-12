@@ -4,7 +4,7 @@
 //!
 //! ## Currently Supported Operations
 //!
-//! - SObject CRUD operations (create, read, update, delete, describe)
+//! - SObject CRUD operations (create, read, update, delete, describe, get deleted)
 //! - Flow invocation via Custom Invocable Actions
 //!
 //! # Examples
@@ -67,7 +67,9 @@ pub mod flow;
 pub use client::{Client, ClientBuilder, Error as ClientError};
 
 // SObject types
-pub use salesforce_core_restapi::types::{CreateRecordResponse, SObjectDescribe, SObjectField};
+pub use salesforce_core_restapi::types::{
+    CreateRecordResponse, DeletedRecord, GetDeletedRecordsResponse, SObjectDescribe, SObjectField,
+};
 pub use sobject::Error as SObjectError;
 
 // Search types
