@@ -21,7 +21,7 @@ pub enum Error {
     #[error("Flow API error: {source}")]
     FlowApi {
         #[source]
-        source: GeneratedError<salesforce_core_restapi::types::ErrorResponse>,
+        source: Box<GeneratedError<salesforce_core_restapi::types::ErrorResponse>>,
     },
 
     /// Network-level communication failure.
@@ -200,7 +200,9 @@ impl Client {
         let response = client
             .invoke_flow(flow_api_name, request)
             .await
-            .map_err(|source| Error::FlowApi { source })?;
+            .map_err(|source| Error::FlowApi {
+                source: Box::new(source),
+            })?;
 
         Ok(response.into_inner())
     }

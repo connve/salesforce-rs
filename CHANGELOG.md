@@ -4,6 +4,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-12
+
+### Added
+- `restapi::Client::get_deleted(sobject_type, start..end)` retrieves the IDs and deletion datetimes of records deleted within a time window, via `GET /sobjects/{sObjectType}/deleted`. The window is a `Range<DateTime<Utc>>`, so it reads directionally at the call site and carries the half-open `[start, end)` semantics the endpoint already has. Returns a `GetDeleted` builder dispatched with `.send().await`, supporting the same per-call `.header()` / `.headers()` plumbing as the other SObject operations.
+- `restapi::{DeletedRecord, GetDeletedRecordsResponse}` re-exported from the generated client. The response carries `deleted_records`, `earliest_date_available`, and `latest_date_covered`.
+- `chrono` is now a direct dependency of `salesforce_core`; `get_deleted` takes `DateTime<Utc>` bounds rather than pre-formatted strings. It is re-exported as `salesforce_core::chrono`, so callers can build those values without declaring their own `chrono` dependency and risking a version mismatch with the one the SDK was built against.
+- `restapi::sobject::Error::InvalidTimeWindow { start, end }` is returned by `GetDeleted::send()` when `end` is not after `start`, without issuing a request. Salesforce's remaining constraints (retention cut-off, the 600,000-record `EXCEEDED_ID_LIMIT`, `end` in the future) stay server-side, since they vary by org and over time; read `earliest_date_available` from the response rather than assuming a fixed retention figure.
+
+### Changed
+- Workspace lints are now declared centrally in `[workspace.lints.clippy]` and opted into by `salesforce-core`: `clippy::all` is denied, and `allow_attributes` / `allow_attributes_without_reason` require suppressions to be written as `#[expect(lint, reason = "...")]`. Because clippy reports an `#[expect]` that no longer applies, obsolete suppressions surface instead of lingering silently.
+- Removed a crate-wide `#![allow(clippy::result_large_err)]` from `lib.rs` and `#[allow(clippy::type_complexity)]` from `client::Client`, and finished the boxing that 0.17.0 began: `restapi::search::Error::SearchApi`, `restapi::flow::Error::FlowApi`, `bulkapi::ingest::Error::BulkApi`, and `bulkapi::query::Error::BulkApi` now box their `GeneratedError` source, matching `restapi::sobject` and `restapi::composite`. The variants still expose the same `#[source]` accessor, so this is not a breaking change.
+
 ## [0.17.0] - 2026-06-29
 
 ### Added
@@ -11,7 +23,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
   - `restapi::sobject::{Create, Get, GetByExternalId, Update, Delete, Describe, BasicInfo}`
   - `restapi::composite::{CreateRecords, GetRecords, UpdateRecords, UpsertRecords, DeleteRecords, CreateRecordTree}`
 - `restapi::ClientBuilder::default_headers(HeaderMap)` — set Salesforce headers once per client; per-call headers merge on top.
-- `is_retryable()` on the three remaining public `Error` enums missed by 0.16.0: `restapi::client::Error`, `bulkapi::client::Error`, `soapapi::client::Error`. All three are builder/config errors and report `false`. Closes the §6 (AGENTS.md) uniformity gap.
+- `is_retryable()` on the three remaining public `Error` enums missed by 0.16.0: `restapi::client::Error`, `bulkapi::client::Error`, `soapapi::client::Error`. All three are builder/config errors and report `false`. Closes the §6 (CONTRIBUTORS.md) uniformity gap.
 - `restapi::sobject::Error::InvalidHeader { name }` and `restapi::composite::Error::InvalidHeader { name }` surface reserved-name or invalid-value rejections at `.send()` time.
 
 ### Changed
