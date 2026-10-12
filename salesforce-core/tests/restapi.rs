@@ -1,8 +1,8 @@
-//! Integration tests for the REST API (SObject CRUD and Search).
+//! Integration tests for the REST API (SObject CRUD, Query and Search).
 
 mod common;
 
-use salesforce_core::restapi::ClientBuilder;
+use salesforce_core::restapi::{ClientBuilder, QueryError};
 use serde_json::json;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -165,6 +165,79 @@ async fn test_get_deleted_records() -> Result {
         assert!(!record.id.is_empty());
         assert!(record.deleted_date >= deleted.earliest_date_available);
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_query_and_query_all() -> Result {
+    skip_if_no_credentials!();
+
+    let auth = common::auth_client().await?;
+    let client = ClientBuilder::new(auth).build()?;
+
+    let create_resp = client
+        .create("Account", json!({"Name": "QueryTestXYZ97"}))
+        .send()
+        .await?;
+    let id = create_resp.id.clone();
+    let soql = format!("SELECT Id, Name FROM Account WHERE Id = '{id}'");
+
+    let live = client.query(&soql).send().await?;
+    assert!(live.done);
+    assert_eq!(live.total_size, 1);
+    assert_eq!(
+        live.records[0].get("Name").and_then(|v| v.as_str()),
+        Some("QueryTestXYZ97")
+    );
+
+    client.delete("Account", &id).send().await?;
+
+    let after_delete = client.query(&soql).send().await?;
+    assert_eq!(after_delete.total_size, 0);
+
+    let including_deleted = client.query_all(&soql).send().await?;
+    assert_eq!(including_deleted.total_size, 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_query_more_follows_next_records_url() -> Result {
+    skip_if_no_credentials!();
+
+    let auth = common::auth_client().await?;
+    let client = ClientBuilder::new(auth).build()?;
+
+    // 200 is the smallest batch size Salesforce accepts. Orgs with fewer
+    // matching records return everything in one batch, in which case there is
+    // no next page to follow and only the first request is exercised.
+    let mut page = client
+        .query("SELECT Id FROM PermissionSet")
+        .header("Sforce-Query-Options", "batchSize=200")
+        .send()
+        .await?;
+    let total_size = page.total_size;
+    let mut fetched = page.records.len();
+    while let Some(next) = page.next_records_url {
+        page = client.query_more(next).send().await?;
+        fetched += page.records.len();
+    }
+    assert!(page.done);
+    assert_eq!(i64::try_from(fetched)?, total_size);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_query_malformed_soql() -> Result {
+    skip_if_no_credentials!();
+
+    let auth = common::auth_client().await?;
+    let client = ClientBuilder::new(auth).build()?;
+
+    let result = client.query("SELEC Id FROM Account").send().await;
+    assert!(matches!(result, Err(QueryError::QueryApi { .. })));
 
     Ok(())
 }

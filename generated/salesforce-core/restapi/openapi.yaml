@@ -17,7 +17,7 @@ servers:
         default: yourinstance.my.salesforce
         description: Your Salesforce instance domain
       apiVersion:
-        default: "65.0"
+        default: "68.0"
         description: Salesforce API version
 
 security:
@@ -97,7 +97,41 @@ components:
         url:
           type: string
           description: REST API URL to the record
-          example: "/services/data/v65.0/sobjects/Account/001xx000003DGb2AAG"
+          example: "/services/data/v68.0/sobjects/Account/001xx000003DGb2AAG"
+
+    # Query (SOQL) Schemas
+    QueryResponse:
+      type: object
+      required:
+        - totalSize
+        - done
+        - records
+      properties:
+        totalSize:
+          type: integer
+          format: int64
+          description: |
+            Total number of records matching the query, across all batches.
+          example: 2
+        done:
+          type: boolean
+          description: |
+            Whether this batch is the last one. When `false`, fetch the next
+            batch with `nextRecordsUrl`.
+          example: true
+        nextRecordsUrl:
+          type: string
+          description: |
+            URL of the next batch of results. Present only when `done` is `false`.
+          example: "/services/data/v68.0/query/01gxx0000002GJm-2000"
+        records:
+          type: array
+          description: |
+            Records in this batch. Each record carries an `attributes` object
+            (`type`, `url`) alongside the selected fields.
+          items:
+            type: object
+            additionalProperties: {}
 
     # SObject CRUD Schemas
     CreateRecordResponse:
@@ -1445,6 +1479,127 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /query:
+    get:
+      summary: Query (SOQL)
+      description: |
+        Executes a SOQL query synchronously and returns the first batch of
+        matching records. Any queryable object can be targeted, including
+        custom settings and custom metadata types.
+      operationId: query
+      tags:
+        - Query
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: A SOQL query string
+          schema:
+            type: string
+          example: "SELECT Id, Name FROM Account LIMIT 10"
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '400':
+          description: Bad request (malformed SOQL query)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /queryAll:
+    get:
+      summary: Query All (SOQL, including deleted and archived records)
+      description: |
+        Executes a SOQL query that also returns records deleted into the
+        Recycle Bin, records removed by a merge, and archived activities.
+        Remaining batches are fetched with the `/query/{queryLocator}`
+        resource, even though they belong to a `queryAll` request.
+      operationId: queryAll
+      tags:
+        - Query
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: A SOQL query string
+          schema:
+            type: string
+          example: "SELECT Id, Name FROM Account WHERE IsDeleted = true"
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '400':
+          description: Bad request (malformed SOQL query)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /query/{queryLocator}:
+    get:
+      summary: Query More
+      description: |
+        Retrieves the next batch of results for a query whose previous
+        response had `done: false`. The locator is the final path segment of
+        that response's `nextRecordsUrl`.
+      operationId: queryMore
+      tags:
+        - Query
+      parameters:
+        - name: queryLocator
+          in: path
+          required: true
+          description: The query locator from `nextRecordsUrl`
+          schema:
+            type: string
+          example: "01gxx0000002GJm-2000"
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '400':
+          description: Bad request (invalid or expired query locator)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Query locator not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /actions/custom/flow/{flowApiName}:
     post:
       summary: Invoke Flow
@@ -1504,6 +1659,8 @@ tags:
     description: SObject REST API operations for CRUD operations on individual records
   - name: Composite
     description: Composite API for bulk operations on multiple records
+  - name: Query
+    description: SOQL query operations
   - name: Search
     description: SOSL search operations
   - name: Flow

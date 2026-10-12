@@ -145,7 +145,7 @@ impl ClientBuilder {
     ///
     /// # Arguments
     ///
-    /// * `version` - Salesforce API version (e.g., "65.0")
+    /// * `version` - Salesforce API version (e.g., "68.0")
     ///
     /// # Returns
     ///

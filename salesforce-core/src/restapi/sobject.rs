@@ -5,10 +5,10 @@
 //! `Sforce-Auto-Assign`, …) via `.header()` / `.headers()`, then is dispatched
 //! with `.send().await`.
 
+use super::headers::{impl_header_methods, HeaderBag, InvalidHeader};
 use super::Client;
 use crate::client;
 use chrono::{DateTime, Utc};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use salesforce_core_restapi::types::{
     CreateRecordResponse, GetDeletedRecordsResponse, SObjectBasicInfo, SObjectDescribe,
 };
@@ -105,62 +105,10 @@ fn unexpected(actual_type: &str) -> Error {
     }
 }
 
-/// Accumulator for headers added to a request builder.
-///
-/// Header name/value conversion errors and forbidden-header detection are
-/// surfaced from `.send()` so callers don't need to handle them at chain time.
-struct HeaderBag {
-    headers: HeaderMap,
-    invalid: Option<String>,
-}
-
-impl HeaderBag {
-    fn new() -> Self {
-        Self {
-            headers: HeaderMap::new(),
-            invalid: None,
-        }
-    }
-
-    fn from_map(headers: HeaderMap) -> Self {
-        Self {
-            headers,
-            invalid: None,
-        }
-    }
-
-    fn add<N, V>(&mut self, name: N, value: V)
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        if self.invalid.is_some() {
-            return;
-        }
-        match name.try_into() {
-            Err(_) => self.invalid = Some("<invalid name>".to_string()),
-            Ok(name) => match value.try_into() {
-                Err(_) => self.invalid = Some(name.as_str().to_string()),
-                Ok(value) => {
-                    self.headers.append(name, value);
-                }
-            },
-        }
-    }
-
-    fn finish(self) -> Result<HeaderMap, Error> {
-        if let Some(name) = self.invalid {
-            return Err(Error::InvalidHeader { name });
-        }
-        if let Some(name) = super::client::forbidden_header(&self.headers) {
-            return Err(Error::InvalidHeader { name });
-        }
-        Ok(self.headers)
-    }
-}
-
 async fn http_client_with(client: &Client, bag: HeaderBag) -> Result<reqwest::Client, Error> {
-    let extra = bag.finish()?;
+    let extra = bag
+        .finish()
+        .map_err(|InvalidHeader { name }| Error::InvalidHeader { name })?;
     client
         .get_http_client_with_extra(&extra)
         .await
@@ -192,21 +140,7 @@ pub struct Create<'a> {
 }
 
 impl<'a> Create<'a> {
-    /// Adds a single header to this request.
-    pub fn header<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        self.headers.add(name, value);
-        self
-    }
-
-    /// Replaces all per-call headers with `headers`.
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = HeaderBag::from_map(headers);
-        self
-    }
+    impl_header_methods!();
 
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
@@ -241,21 +175,7 @@ impl<'a> Get<'a> {
         self
     }
 
-    /// Adds a single header to this request.
-    pub fn header<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        self.headers.add(name, value);
-        self
-    }
-
-    /// Replaces all per-call headers with `headers`.
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = HeaderBag::from_map(headers);
-        self
-    }
+    impl_header_methods!();
 
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
@@ -290,21 +210,7 @@ impl<'a> GetByExternalId<'a> {
         self
     }
 
-    /// Adds a single header to this request.
-    pub fn header<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        self.headers.add(name, value);
-        self
-    }
-
-    /// Replaces all per-call headers with `headers`.
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = HeaderBag::from_map(headers);
-        self
-    }
+    impl_header_methods!();
 
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
@@ -337,21 +243,7 @@ pub struct Update<'a> {
 }
 
 impl<'a> Update<'a> {
-    /// Adds a single header to this request.
-    pub fn header<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        self.headers.add(name, value);
-        self
-    }
-
-    /// Replaces all per-call headers with `headers`.
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = HeaderBag::from_map(headers);
-        self
-    }
+    impl_header_methods!();
 
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
@@ -378,21 +270,7 @@ pub struct Delete<'a> {
 }
 
 impl<'a> Delete<'a> {
-    /// Adds a single header to this request.
-    pub fn header<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        self.headers.add(name, value);
-        self
-    }
-
-    /// Replaces all per-call headers with `headers`.
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = HeaderBag::from_map(headers);
-        self
-    }
+    impl_header_methods!();
 
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
@@ -417,21 +295,7 @@ pub struct Describe<'a> {
 }
 
 impl<'a> Describe<'a> {
-    /// Adds a single header to this request.
-    pub fn header<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        self.headers.add(name, value);
-        self
-    }
-
-    /// Replaces all per-call headers with `headers`.
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = HeaderBag::from_map(headers);
-        self
-    }
+    impl_header_methods!();
 
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
@@ -457,21 +321,7 @@ pub struct BasicInfo<'a> {
 }
 
 impl<'a> BasicInfo<'a> {
-    /// Adds a single header to this request.
-    pub fn header<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        self.headers.add(name, value);
-        self
-    }
-
-    /// Replaces all per-call headers with `headers`.
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = HeaderBag::from_map(headers);
-        self
-    }
+    impl_header_methods!();
 
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
@@ -498,21 +348,7 @@ pub struct GetDeleted<'a> {
 }
 
 impl<'a> GetDeleted<'a> {
-    /// Adds a single header to this request.
-    pub fn header<N, V>(mut self, name: N, value: V) -> Self
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        self.headers.add(name, value);
-        self
-    }
-
-    /// Replaces all per-call headers with `headers`.
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
-        self.headers = HeaderBag::from_map(headers);
-        self
-    }
+    impl_header_methods!();
 
     /// Dispatches the request.
     ///
@@ -785,34 +621,5 @@ mod tests {
     fn test_require_object_accepts_object() {
         let result = require_object(serde_json::json!({"x": 1}));
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_header_bag_rejects_forbidden() {
-        let mut bag = HeaderBag::new();
-        bag.add("Authorization", "Bearer x");
-        assert!(matches!(
-            bag.finish(),
-            Err(Error::InvalidHeader { ref name }) if name == "authorization"
-        ));
-    }
-
-    #[test]
-    fn test_header_bag_rejects_invalid_value() {
-        let mut bag = HeaderBag::new();
-        bag.add("Sforce-Auto-Assign", "bad\nvalue");
-        assert!(matches!(
-            bag.finish(),
-            Err(Error::InvalidHeader { ref name }) if name == "sforce-auto-assign"
-        ));
-    }
-
-    #[test]
-    fn test_header_bag_accepts_sforce_headers() {
-        let mut bag = HeaderBag::new();
-        bag.add("Sforce-Duplicate-Rule-Header", "allowSave=true");
-        bag.add("Sforce-Auto-Assign", "FALSE");
-        let map = bag.finish().expect("valid headers");
-        assert_eq!(map.len(), 2);
     }
 }

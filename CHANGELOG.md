@@ -4,6 +4,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-12
+
+### Added
+- `restapi::Client::query(soql)` executes a SOQL query via `GET /query` and returns the first batch of results. It works against any queryable object, so custom settings and custom metadata types (`SELECT Name, Value__c FROM My_Setting__c`) can now be read through the SDK.
+- `restapi::Client::query_all(soql)` executes the same query via `GET /queryAll`, which also returns records in the Recycle Bin, records removed by a merge, and archived activities.
+- `restapi::Client::query_more(next_records_url)` fetches the next batch when a response has `done: false`. It accepts the response's `next_records_url` as returned, or the bare query locator, and covers `query_all` pagination too, since Salesforce serves both through `/query/{queryLocator}`.
+- All three return builders (`restapi::query::{Query, QueryAll, QueryMore}`) dispatched with `.send().await`, with the same `.header()` / `.headers()` plumbing as the SObject and Composite operations; set `Sforce-Query-Options: batchSize=<n>` to change the batch size.
+- `restapi::QueryResponse` (`total_size`, `done`, `next_records_url`, `records`) re-exported from the generated client, and `restapi::QueryError`, whose `InvalidNextRecordsUrl` variant is returned by `QueryMore::send()` without issuing a request when no query locator can be extracted.
+
+### Changed
+- `DEFAULT_API_VERSION` is now `68.0` (Winter '27), up from `65.0` (Winter '26). Every client built without `.api_version(...)` (REST, Bulk 2.0, Tooling, SOAP) now targets v68.0, as do the server defaults in the bundled OpenAPI specs. Winter '27 finished rolling out to production orgs on 2026-10-09; to keep the previous behaviour, pin it with `.api_version("65.0")` on the client builder.
+
 ## [0.18.0] - 2026-09-12
 
 ### Added

@@ -7,6 +7,7 @@
 //! - Updating records
 //! - Deleting records
 //! - Describing SObject metadata
+//! - Querying records with SOQL, following `nextRecordsUrl` across batches
 //! - Getting records deleted within a time window
 
 use salesforce_core::chrono::{Duration, Utc};
@@ -176,6 +177,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     info!("Retrieved by external ID: {}", serde_json::to_string_pretty(&external_record)?);
     */
+
+    // Example 6b: SOQL query. The same call works for custom settings and
+    // custom metadata types, e.g. "SELECT Name, Value__c FROM My_Setting__c".
+    info!("\n--- Example 6b: Querying Contacts with SOQL ---");
+    let mut page = rest_client
+        .query(format!(
+            "SELECT Id, FirstName, LastName FROM Contact WHERE AccountId = '{account_id}'"
+        ))
+        .send()
+        .await?;
+    let mut records = std::mem::take(&mut page.records);
+    while let Some(next) = page.next_records_url.take() {
+        page = rest_client.query_more(next).send().await?;
+        records.append(&mut page.records);
+    }
+    info!(
+        "Query returned {} of {} record(s)",
+        records.len(),
+        page.total_size
+    );
+    for record in &records {
+        info!("  - {}", serde_json::to_string(record)?);
+    }
 
     // Example 7: Clean up - Delete the created records
     info!("\n--- Example 7: Cleaning up ---");

@@ -66,16 +66,15 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ needs.detect-version.outputs.tag }}
-          release_name: Release ${{ needs.detect-version.outputs.tag }}
-          body: |
-            ${{ steps.changelog.outputs.changelog }}
-          draft: false
-          prerelease: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.detect-version.outputs.tag }}
+          CHANGELOG: ${{ steps.changelog.outputs.changelog }}
+        run: |
+          printf '%s\n' "$CHANGELOG" > release-notes.md
+          gh release create "$TAG" \
+            --title "Release $TAG" \
+            --notes-file release-notes.md
 
   publish:
     needs: [detect-version, create-release]

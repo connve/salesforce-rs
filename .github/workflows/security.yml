@@ -16,14 +16,13 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      # Reads channel + components from `rust-toolchain.toml`.
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-audit
         run: cargo install cargo-audit
 
       - name: Run security audit
+        # Ignored advisories, if any, are listed in .cargo/audit.toml.
         run: cargo audit
 

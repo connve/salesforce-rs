@@ -18,7 +18,7 @@ Unofficial Rust SDK family for the Salesforce platform.
 salesforce-rs/
 ├── salesforce-core/           # User-facing crate for Core APIs
 │   └── src/
-│       ├── restapi/           # SObject CRUD, get deleted, search, composite
+│       ├── restapi/           # SObject CRUD, get deleted, SOQL query, search, composite
 │       ├── bulkapi/           # Bulk 2.0 query and ingest
 │       ├── toolingapi/        # Tooling API
 │       ├── pubsubapi/         # Pub/Sub gRPC streaming
@@ -72,7 +72,7 @@ cargo run --example restapi
 Integration tests use the same `SFDC_CREDENTIALS` env var. Without it, they skip silently:
 
 ```bash
-SFDC_CREDENTIALS=$PWD/credentials.json cargo test --test auth --test restapi --test composite --test bulkapi --test soapapi
+SFDC_CREDENTIALS=$PWD/credentials.json cargo test -p salesforce_core --test '*'
 ```
 
 ### Releasing
