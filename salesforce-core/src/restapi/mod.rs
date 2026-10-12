@@ -5,6 +5,8 @@
 //! ## Currently Supported Operations
 //!
 //! - SObject CRUD operations (create, read, update, delete, describe, get deleted)
+//! - SOQL queries, including `queryAll` and pagination via `nextRecordsUrl`
+//! - SOSL search
 //! - Flow invocation via Custom Invocable Actions
 //!
 //! # Examples
@@ -52,11 +54,17 @@
 /// REST API client and builder.
 mod client;
 
+/// Per-call request header plumbing shared by the request builders.
+mod headers;
+
 /// SObject CRUD operations for individual records.
 pub mod sobject;
 
 /// Composite API operations for bulk record operations.
 pub mod composite;
+
+/// SOQL query operations.
+pub mod query;
 
 /// SOSL search operations.
 pub mod search;
@@ -71,6 +79,10 @@ pub use salesforce_core_restapi::types::{
     CreateRecordResponse, DeletedRecord, GetDeletedRecordsResponse, SObjectDescribe, SObjectField,
 };
 pub use sobject::Error as SObjectError;
+
+// Query types
+pub use query::Error as QueryError;
+pub use salesforce_core_restapi::types::QueryResponse;
 
 // Search types
 pub use salesforce_core_restapi::types::{SearchRecord, SearchRecordAttributes, SearchResponse};

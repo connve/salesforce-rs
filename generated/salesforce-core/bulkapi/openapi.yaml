@@ -17,7 +17,7 @@ servers:
         default: yourinstance.my.salesforce
         description: Your Salesforce instance domain
       apiVersion:
-        default: "65.0"
+        default: "68.0"
         description: Salesforce API version
 
 security:
@@ -191,7 +191,7 @@ components:
           type: number
           format: float
           description: API version used for the job
-          example: 65.0
+          example: 68.0
         jobType:
           $ref: '#/components/schemas/JobType'
         lineEnding:
@@ -233,7 +233,7 @@ components:
         nextRecordsUrl:
           type: string
           description: URL to retrieve the next page of results (if done is false)
-          example: "/services/data/v65.0/jobs/query?locator=xxx"
+          example: "/services/data/v68.0/jobs/query?locator=xxx"
 
     QueryResultPage:
       type: object
@@ -243,7 +243,7 @@ components:
         resultUrl:
           type: string
           description: The request URI with the locator for getting data
-          example: "/services/data/v65.0/jobs/query/750R0000000zxr8IAA/results?locator=aBcDeFg4N"
+          example: "/services/data/v68.0/jobs/query/750R0000000zxr8IAA/results?locator=aBcDeFg4N"
 
     QueryResultPages:
       type: object
@@ -259,7 +259,7 @@ components:
         nextRecordsUrl:
           type: string
           description: The URI used to get the next set of resultPages
-          example: "/services/data/v65.0/jobs/query/750R0000000zxr8IAA/resultPages?locator=YcApWm4N"
+          example: "/services/data/v68.0/jobs/query/750R0000000zxr8IAA/resultPages?locator=YcApWm4N"
         done:
           type: boolean
           description: A Boolean value that indicates whether more resultUrl URIs are available
@@ -345,11 +345,11 @@ components:
           type: number
           format: float
           description: API version used for the job
-          example: 65.0
+          example: 68.0
         contentUrl:
           type: string
           description: Relative URL to upload data
-          example: "services/data/v65.0/jobs/ingest/750xx0000000002AAA/batches"
+          example: "services/data/v68.0/jobs/ingest/750xx0000000002AAA/batches"
         jobType:
           $ref: '#/components/schemas/JobType'
         lineEnding:

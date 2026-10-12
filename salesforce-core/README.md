@@ -11,7 +11,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.18"
+salesforce_core = "0.19"
 ```
 
 ## Cargo features
@@ -21,7 +21,7 @@ compile-time cost of what they use. All four are enabled by default.
 
 | Feature      | Enables                                                      |
 |--------------|--------------------------------------------------------------|
-| `restapi`    | SObject CRUD, search, composite collections, flow invocation (REST API) |
+| `restapi`    | SObject CRUD, SOQL query, search, composite collections, flow invocation (REST API) |
 | `bulkapi`    | Bulk API 2.0 query and ingest jobs                           |
 | `toolingapi` | Tooling API (managed event subscriptions)                    |
 | `pubsubapi`  | Pub/Sub API gRPC streaming (pulls in `tonic`)                |
@@ -31,7 +31,7 @@ compile-time cost of what they use. All four are enabled by default.
 For a slim build, disable defaults and opt in:
 
 ```toml
-salesforce_core = { version = "0.18", default-features = false, features = ["restapi"] }
+salesforce_core = { version = "0.19", default-features = false, features = ["restapi"] }
 ```
 
 `chrono` appears in the public API — operations taking a time window accept
@@ -176,6 +176,14 @@ The credentials JSON file:
 | Upsert Records (batch) | Supported |
 | Create Record Tree | Supported |
 
+### Query
+
+| Operation | Status |
+|-----------|--------|
+| SOQL Query | Supported |
+| SOQL Query All (including deleted and archived) | Supported |
+| Query More (`nextRecordsUrl` pagination) | Supported |
+
 ### Search
 
 | Operation | Status |
@@ -244,7 +252,7 @@ The credentials JSON file:
 
 See the [examples directory](https://github.com/connve/salesforce-rs/tree/main/examples/salesforce-core):
 
-- [`restapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/restapi.rs) — SObject CRUD operations
+- [`restapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/restapi.rs) — SObject CRUD operations and SOQL queries
 - [`bulkapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/bulkapi.rs) — Query and ingest for large datasets
 - [`toolingapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/toolingapi.rs) — Managed event subscriptions
 - [`pubsubapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/pubsubapi.rs) — Platform events and CDC via gRPC

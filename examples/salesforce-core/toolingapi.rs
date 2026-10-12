@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect()
         .await?;
 
-    // Create Tooling API client with default API version (v65.0)
+    // Create Tooling API client with the default API version (`DEFAULT_API_VERSION`)
     let tooling_client = ClientBuilder::new(auth_client.clone()).build()?;
 
     info!("Tooling API client initialized successfully");

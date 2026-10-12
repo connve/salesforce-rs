@@ -5,8 +5,8 @@
 //! optional Salesforce-specific headers via `.header()` / `.headers()`, then
 //! is dispatched with `.send().await`.
 
+use super::headers::{impl_header_methods, HeaderBag, InvalidHeader};
 use super::Client;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use salesforce_core_restapi::types::{
     CompositeCollectionCreateRequest, CompositeCollectionCreateResponse,
     CompositeCollectionDeleteResponse, CompositeCollectionRetrieveRequest,
@@ -76,58 +76,10 @@ impl Error {
     }
 }
 
-struct HeaderBag {
-    headers: HeaderMap,
-    invalid: Option<String>,
-}
-
-impl HeaderBag {
-    fn new() -> Self {
-        Self {
-            headers: HeaderMap::new(),
-            invalid: None,
-        }
-    }
-
-    fn from_map(headers: HeaderMap) -> Self {
-        Self {
-            headers,
-            invalid: None,
-        }
-    }
-
-    fn add<N, V>(&mut self, name: N, value: V)
-    where
-        N: TryInto<HeaderName>,
-        V: TryInto<HeaderValue>,
-    {
-        if self.invalid.is_some() {
-            return;
-        }
-        match name.try_into() {
-            Err(_) => self.invalid = Some("<invalid name>".to_string()),
-            Ok(name) => match value.try_into() {
-                Err(_) => self.invalid = Some(name.as_str().to_string()),
-                Ok(value) => {
-                    self.headers.append(name, value);
-                }
-            },
-        }
-    }
-
-    fn finish(self) -> Result<HeaderMap, Error> {
-        if let Some(name) = self.invalid {
-            return Err(Error::InvalidHeader { name });
-        }
-        if let Some(name) = super::client::forbidden_header(&self.headers) {
-            return Err(Error::InvalidHeader { name });
-        }
-        Ok(self.headers)
-    }
-}
-
 async fn http_client_with(client: &Client, bag: HeaderBag) -> Result<reqwest::Client, Error> {
-    let extra = bag.finish()?;
+    let extra = bag
+        .finish()
+        .map_err(|InvalidHeader { name }| Error::InvalidHeader { name })?;
     client
         .get_http_client_with_extra(&extra)
         .await
@@ -137,26 +89,6 @@ async fn http_client_with(client: &Client, bag: HeaderBag) -> Result<reqwest::Cl
 fn generated(client: &Client, http_client: reqwest::Client) -> Result<GeneratedClient, Error> {
     let base_url = client.base_url().map_err(|source| Error::Auth { source })?;
     Ok(GeneratedClient::new_with_client(&base_url, http_client))
-}
-
-macro_rules! impl_header_methods {
-    () => {
-        /// Adds a single header to this request.
-        pub fn header<N, V>(mut self, name: N, value: V) -> Self
-        where
-            N: TryInto<HeaderName>,
-            V: TryInto<HeaderValue>,
-        {
-            self.headers.add(name, value);
-            self
-        }
-
-        /// Replaces all per-call headers with `headers`.
-        pub fn headers(mut self, headers: HeaderMap) -> Self {
-            self.headers = HeaderBag::from_map(headers);
-            self
-        }
-    };
 }
 
 /// Builder for [`Client::create_records`].
@@ -459,28 +391,5 @@ impl Client {
             request,
             headers: HeaderBag::new(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_header_bag_rejects_forbidden() {
-        let mut bag = HeaderBag::new();
-        bag.add("Authorization", "Bearer x");
-        assert!(matches!(
-            bag.finish(),
-            Err(Error::InvalidHeader { ref name }) if name == "authorization"
-        ));
-    }
-
-    #[test]
-    fn test_header_bag_accepts_sforce_headers() {
-        let mut bag = HeaderBag::new();
-        bag.add("Sforce-Duplicate-Rule-Header", "allowSave=true");
-        let map = bag.finish().expect("valid headers");
-        assert_eq!(map.len(), 1);
     }
 }

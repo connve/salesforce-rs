@@ -139,7 +139,7 @@ impl ClientBuilder {
     ///
     /// # Arguments
     ///
-    /// * `version` - The API version (e.g., "65.0")
+    /// * `version` - The API version (e.g., "68.0")
     pub fn api_version(mut self, version: impl Into<String>) -> Self {
         self.api_version = Some(version.into());
         self

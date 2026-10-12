@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "salesforce-core",
     "generated/salesforce-core/bulkapi",
@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.18.0"
+version = "0.19.0"
 authors = ["CONNVE"]
 license = "MPL-2.0"
 edition = "2021"
@@ -32,10 +32,10 @@ allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
 
 [workspace.dependencies]
-salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "0.18.0" }
-salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "0.18.0" }
-salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "0.18.0" }
-salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "0.18.0" }
+salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "0.19.0" }
+salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "0.19.0" }
+salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "0.19.0" }
+salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "0.19.0" }
 tokio = { version = "1.48", default-features = false, features = [
     "macros",
     "rt-multi-thread",

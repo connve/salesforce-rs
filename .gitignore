@@ -1,6 +1,7 @@
 /target
 /local
-.cargo/
+.cargo/*
+!.cargo/audit.toml
 .idea/
 .DS_Store
 .git

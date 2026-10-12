@@ -26,7 +26,7 @@
 //!     .connect()
 //!     .await?;
 //!
-//! // Create Bulk API client with default API version (v65.0)
+//! // Create Bulk API client with the default API version (`DEFAULT_API_VERSION`)
 //! let bulk_client = ClientBuilder::new(auth_client.clone()).build()?;
 //!
 //! // Or specify a custom API version

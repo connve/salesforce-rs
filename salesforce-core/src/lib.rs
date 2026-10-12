@@ -41,7 +41,7 @@
 //! Each API surface is gated behind a feature so applications only pay the
 //! compile-time cost of what they use. All four are enabled by default.
 //!
-//! - `restapi` — SObject CRUD, search, composite collections (REST API)
+//! - `restapi` — SObject CRUD, SOQL query, search, composite collections (REST API)
 //! - `bulkapi` — Bulk API 2.0 query and ingest jobs
 //! - `toolingapi` — Tooling API (managed event subscriptions)
 //! - `pubsubapi` — Pub/Sub API gRPC streaming (pulls in `tonic`)
@@ -51,7 +51,7 @@
 //! For a slim build, disable defaults and opt in:
 //!
 //! ```toml
-//! salesforce_core = { version = "0.18", default-features = false, features = ["restapi"] }
+//! salesforce_core = { version = "0.19", default-features = false, features = ["restapi"] }
 //! ```
 
 /// Re-export of [`chrono`], which appears in this crate's public API.
@@ -74,8 +74,8 @@
 )]
 pub use chrono;
 
-/// Default Salesforce API version (Winter '26 - API version 65.0).
-pub const DEFAULT_API_VERSION: &str = "65.0";
+/// Default Salesforce API version (Winter '27 - API version 68.0).
+pub const DEFAULT_API_VERSION: &str = "68.0";
 
 /// Default connection timeout for HTTP requests (30 seconds).
 pub const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 30;

@@ -114,6 +114,8 @@ arguments directly; migrating them is open work.
 - Generated crates are pinned by exact version in `[workspace.dependencies]`
   alongside their `path`. A release bump has to update both, or the workspace
   stops resolving.
+- We use `resolver = "3"`, so `cargo update` only picks versions that build
+  on our `rust-version`. The `test-msrv` CI job checks this.
 
 ## Code quality standards
 
