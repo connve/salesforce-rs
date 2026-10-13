@@ -1527,7 +1527,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "salesforce_core"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "chrono",
  "futures-util",
@@ -1551,7 +1551,7 @@ dependencies = [
 
 [[package]]
 name = "salesforce_core_bulkapi"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "chrono",
  "openapiv3",
@@ -1565,7 +1565,7 @@ dependencies = [
 
 [[package]]
 name = "salesforce_core_pubsubapi"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "bytes",
  "prost",
@@ -1580,7 +1580,7 @@ dependencies = [
 
 [[package]]
 name = "salesforce_core_restapi"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "chrono",
  "openapiv3",
@@ -1597,7 +1597,7 @@ dependencies = [
 
 [[package]]
 name = "salesforce_core_toolingapi"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "openapiv3",
  "progenitor",

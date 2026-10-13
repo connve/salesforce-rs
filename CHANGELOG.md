@@ -4,31 +4,36 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.20.1]
+
+### Fixed
+- `salesforce_core_pubsubapi` didn't build on its own, so 0.20.0 was only partly published. It now enables `serde/std` directly.
+
 ## [0.20.0]
 
 ### Changed
-- **Breaking:** `client::Credentials::client_secret` and `password` are now `Option<SecretString>`, so they no longer show up in `Debug` output and are zeroed on drop. Build them with `Some("...".into())`. `Credentials` no longer implements `Serialize`. `secrecy` is re-exported as `salesforce_core::secrecy`.
-- **Breaking:** `client::Client::access_token()` and `current_access_token()` return `SecretString` instead of `String`. Read the token with `ExposeSecret::expose_secret`.
-- **Breaking:** `.headers(map)` on the REST request builders now merges into the headers already set: each name in `map` replaces earlier values for that name, other headers are kept. It used to replace all per-call headers, which also dropped an earlier invalid `.header()` so it was never reported.
-- **Breaking:** `.header(name, value)` on the REST request builders also requires `name: AsRef<str>`, so an invalid name is reported as given instead of as `<invalid name>`. `&str`, `String`, and `HeaderName` all qualify.
-- **Breaking:** `bulkapi::QueryClient::get_results` takes `max_records: Option<NonZeroU64>` instead of `Option<i64>`. Build it with `NonZeroU64::new(n)`.
-- **Breaking:** `CompositeError::HttpClient` and `QueryError::HttpClient` hold a `reqwest::Error`. They used to hold an internal error type that callers couldn't name. An authentication failure while getting the HTTP client is now reported as `Auth`, as in the other modules.
-- `Content-Length`, `Transfer-Encoding`, and `Host` are rejected as default or per-call REST headers, like `Authorization`, `Content-Type`, and `Accept`.
-- REST and Bulk operations reject an SObject type, record ID, external ID, flow name, or job ID that is empty, `.`, `..`, or contains control characters, with a new `InvalidPathSegment` error variant, before sending the request. The generated clients encode `/` but not dots, so `..` used to reach a different endpoint. `query_more` rejects such a locator as `InvalidNextRecordsUrl`.
-- The access token cached by the REST, Bulk, Tooling, and SOAP clients, and the `Authorization` header they send, are redacted from `Debug` output. The Pub/Sub `accesstoken` metadata is marked sensitive.
-- `is_retryable()` on `SObjectError`, `CompositeError`, and `FlowError` now documents that a retried create or flow invocation can run twice.
+- **Breaking:** `Credentials::client_secret` and `password` are `Option<SecretString>`. `Credentials` no longer implements `Serialize`.
+- **Breaking:** `Client::access_token()` and `current_access_token()` return `SecretString`.
+- **Breaking:** `.headers(map)` on REST builders merges into existing headers instead of replacing them.
+- **Breaking:** `.header(name, value)` requires `name: AsRef<str>`; invalid names are reported as given.
+- **Breaking:** `bulkapi::QueryClient::get_results` takes `max_records: Option<NonZeroU64>`.
+- **Breaking:** `CompositeError::HttpClient` and `QueryError::HttpClient` hold a `reqwest::Error`; auth failures go to `Auth`.
+- `Content-Length`, `Transfer-Encoding`, and `Host` are rejected as REST headers.
+- REST and Bulk reject empty, `.`, `..`, or control-character path segments with `InvalidPathSegment`.
+- Access tokens and the `Authorization` header are redacted from `Debug` output.
+- `is_retryable()` docs on `SObjectError`, `CompositeError`, and `FlowError` warn that retried creates and flows can run twice.
 - Removed unused dependencies from the generated crates.
 
 ### Added
-- `salesforce_core::header`, a re-export of `reqwest::header`, whose `HeaderMap` and friends appear in the REST API.
-- `client::Error::InvalidAccessToken`, for an access token that can't be sent as an HTTP header value.
+- `salesforce_core::header` (re-export of `reqwest::header`) and `salesforce_core::secrecy`.
+- `client::Error::InvalidAccessToken`.
 
 ### Fixed
-- `soapapi::Client::merge` put `sobject_type`, `master_record_id`, and the keys of `master_field_overrides` into the SOAP envelope unescaped, so a value from outside could inject XML into the request. The type and ID are now escaped, and a field name that isn't a field API name is rejected with the new `merge::Error::InvalidFieldName` before anything is sent.
-- SObject, Composite, and Query requests built a new `reqwest::Client`, and so a new TCP and TLS connection, on every call. They now share the cached client and add per-call headers to each request.
-- A per-call REST header now replaces a client-level default header of the same name. Both values used to be sent.
-- An invalid access token was reported as `Auth { LockError }`; it is now `Auth { InvalidAccessToken }`. A poisoned HTTP client cache no longer fails every later request.
-- `bulkapi::QueryClient::get_results` turned a negative `max_records` into a huge limit.
+- `soapapi::Client::merge` escapes `sobject_type` and `master_record_id` and rejects invalid field names with `InvalidFieldName`, closing an XML injection.
+- SObject, Composite, and Query reuse the cached HTTP client instead of building one per call.
+- Per-call REST headers replace default headers of the same name instead of being sent alongside them.
+- An invalid access token is reported as `InvalidAccessToken` instead of `LockError`; a poisoned client cache no longer fails later requests.
+- `get_results` no longer turns a negative `max_records` into a huge limit.
 
 ## [0.19.0]
 

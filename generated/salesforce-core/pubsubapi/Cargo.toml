@@ -30,7 +30,8 @@ broken_intra_doc_links = "allow"
 
 [dependencies]
 prost = { workspace = true }
-serde = { workspace = true }
+# Needed for `String`/`Vec<u8>` in the derived impls.
+serde = { workspace = true, features = ["std"] }
 tonic = { workspace = true }
 bytes = { workspace = true }
 tokio-stream = { workspace = true }

@@ -97,3 +97,20 @@ jobs:
         sudo apt-get -qq install pkg-config libssl-dev protobuf-compiler git
     - name: Compile with MSRV
       run: cargo +1.88 check --workspace --all-targets --all-features --locked --verbose
+
+  # Builds each crate on its own, like `cargo publish`.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    # rustup installs the toolchain pinned in `rust-toolchain.toml` on the
+    # first cargo call.
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Install system dependencies
+      run: |
+        sudo apt update -qq
+        sudo apt-get -qq install pkg-config libssl-dev protobuf-compiler git
+    - name: Package and verify each crate
+      run: cargo package --workspace --locked
