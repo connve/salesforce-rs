@@ -15,18 +15,17 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    # Reads channel + components from `rust-toolchain.toml`.
+    # rustup installs the toolchain pinned in `rust-toolchain.toml` on the
+    # first cargo call.
     - uses: dtolnay/rust-toolchain@stable
     - name: Install system dependencies
       run: |
         sudo apt update -qq
         sudo apt-get -qq install pkg-config libssl-dev protobuf-compiler git
-    - name: Add rustfmt and build
+    - name: Build and test
       run: |
-        rustup component add rustfmt
-        cargo build --verbose
-        cargo test --verbose
-        cargo fmt --all
+        cargo build --verbose --workspace --all-features
+        cargo test --verbose --workspace --all-features
 
   integration-test:
     runs-on: ubuntu-latest
@@ -35,7 +34,8 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    # Reads channel + components from `rust-toolchain.toml`.
+    # rustup installs the toolchain pinned in `rust-toolchain.toml` on the
+    # first cargo call.
     - uses: dtolnay/rust-toolchain@stable
     - name: Install system dependencies
       run: |
@@ -64,19 +64,18 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    # Explicit nightly override — `rust-toolchain.toml` pins stable, but
-    # this job intentionally exercises the nightly channel.
+    # `rust-toolchain.toml` pins stable and takes precedence over the default
+    # toolchain this action sets, so the cargo calls below select nightly
+    # explicitly.
     - uses: dtolnay/rust-toolchain@nightly
     - name: Install system dependencies
       run: |
         sudo apt update -qq
         sudo apt-get -qq install pkg-config libssl-dev protobuf-compiler git
-    - name: Add rustfmt and build
+    - name: Build and test
       run: |
-        rustup component add rustfmt
-        cargo build --verbose
-        cargo test --verbose
-        cargo fmt --all
+        cargo +nightly build --verbose --workspace --all-features
+        cargo +nightly test --verbose --workspace --all-features
 
   # Enforces the `rust-version` (MSRV) declared in `Cargo.toml` by
   # compiling the workspace with that exact toolchain. Without this job the

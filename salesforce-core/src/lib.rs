@@ -20,7 +20,7 @@
 //! let auth_client = client::Builder::new()
 //!     .credentials(Credentials {
 //!         client_id: "...".to_string(),
-//!         client_secret: Some("...".to_string()),
+//!         client_secret: Some("...".into()),
 //!         username: None,
 //!         password: None,
 //!         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -73,6 +73,19 @@
     doc = "[`restapi::Client::get_deleted`] is one such operation."
 )]
 pub use chrono;
+
+/// Re-export of [`reqwest::header`], whose types appear in this crate's public
+/// API (`restapi::ClientBuilder::default_headers` and the `.header()` /
+/// `.headers()` methods on the REST request builders).
+///
+/// Depend on this re-export rather than adding `reqwest` separately, so the
+/// version stays in step with the one the SDK was built against.
+pub use reqwest::header;
+
+/// Re-export of [`secrecy`], whose [`SecretString`](secrecy::SecretString)
+/// holds [`client::Credentials::client_secret`] and
+/// [`client::Credentials::password`].
+pub use secrecy;
 
 /// Default Salesforce API version (Winter '27 - API version 68.0).
 pub const DEFAULT_API_VERSION: &str = "68.0";

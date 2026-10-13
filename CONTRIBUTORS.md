@@ -100,8 +100,12 @@ rest.delete_records(ids).all_or_none(false).send().await?;
 ```
 
 **Reference implementations:**
-- The full set of SObject builders, including the header plumbing
-  (`HeaderBag`, `http_client_with`): `salesforce-core/src/restapi/sobject.rs`
+- The full set of SObject builders: `salesforce-core/src/restapi/sobject.rs`
+- Header plumbing (`HeaderBag`, `impl_header_methods!`):
+  `salesforce-core/src/restapi/headers.rs`. Per-call headers reach the wire
+  through the `ClientHooks::pre` hook in
+  `generated/salesforce-core/restapi/src/lib.rs`, so every request shares the
+  cached HTTP client.
 - Builders over collection endpoints: `salesforce-core/src/restapi/composite.rs`
 
 `search()` and `invoke_flow*()` predate this pattern and still take their
@@ -116,6 +120,9 @@ arguments directly; migrating them is open work.
   stops resolving.
 - We use `resolver = "3"`, so `cargo update` only picks versions that build
   on our `rust-version`. The `test-msrv` CI job checks this.
+- MSRV is 1.88, the minimum required by `progenitor` 0.13 and `tonic` 0.14.
+  Raise it only when a dependency requires it, together with the `test-msrv`
+  job and a CHANGELOG entry.
 
 ## Code quality standards
 

@@ -4,7 +4,33 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.19.0] - 2026-10-12
+## [0.20.0]
+
+### Changed
+- **Breaking:** `client::Credentials::client_secret` and `password` are now `Option<SecretString>`, so they no longer show up in `Debug` output and are zeroed on drop. Build them with `Some("...".into())`. `Credentials` no longer implements `Serialize`. `secrecy` is re-exported as `salesforce_core::secrecy`.
+- **Breaking:** `client::Client::access_token()` and `current_access_token()` return `SecretString` instead of `String`. Read the token with `ExposeSecret::expose_secret`.
+- **Breaking:** `.headers(map)` on the REST request builders now merges into the headers already set: each name in `map` replaces earlier values for that name, other headers are kept. It used to replace all per-call headers, which also dropped an earlier invalid `.header()` so it was never reported.
+- **Breaking:** `.header(name, value)` on the REST request builders also requires `name: AsRef<str>`, so an invalid name is reported as given instead of as `<invalid name>`. `&str`, `String`, and `HeaderName` all qualify.
+- **Breaking:** `bulkapi::QueryClient::get_results` takes `max_records: Option<NonZeroU64>` instead of `Option<i64>`. Build it with `NonZeroU64::new(n)`.
+- **Breaking:** `CompositeError::HttpClient` and `QueryError::HttpClient` hold a `reqwest::Error`. They used to hold an internal error type that callers couldn't name. An authentication failure while getting the HTTP client is now reported as `Auth`, as in the other modules.
+- `Content-Length`, `Transfer-Encoding`, and `Host` are rejected as default or per-call REST headers, like `Authorization`, `Content-Type`, and `Accept`.
+- REST and Bulk operations reject an SObject type, record ID, external ID, flow name, or job ID that is empty, `.`, `..`, or contains control characters, with a new `InvalidPathSegment` error variant, before sending the request. The generated clients encode `/` but not dots, so `..` used to reach a different endpoint. `query_more` rejects such a locator as `InvalidNextRecordsUrl`.
+- The access token cached by the REST, Bulk, Tooling, and SOAP clients, and the `Authorization` header they send, are redacted from `Debug` output. The Pub/Sub `accesstoken` metadata is marked sensitive.
+- `is_retryable()` on `SObjectError`, `CompositeError`, and `FlowError` now documents that a retried create or flow invocation can run twice.
+- Removed unused dependencies from the generated crates.
+
+### Added
+- `salesforce_core::header`, a re-export of `reqwest::header`, whose `HeaderMap` and friends appear in the REST API.
+- `client::Error::InvalidAccessToken`, for an access token that can't be sent as an HTTP header value.
+
+### Fixed
+- `soapapi::Client::merge` put `sobject_type`, `master_record_id`, and the keys of `master_field_overrides` into the SOAP envelope unescaped, so a value from outside could inject XML into the request. The type and ID are now escaped, and a field name that isn't a field API name is rejected with the new `merge::Error::InvalidFieldName` before anything is sent.
+- SObject, Composite, and Query requests built a new `reqwest::Client`, and so a new TCP and TLS connection, on every call. They now share the cached client and add per-call headers to each request.
+- A per-call REST header now replaces a client-level default header of the same name. Both values used to be sent.
+- An invalid access token was reported as `Auth { LockError }`; it is now `Auth { InvalidAccessToken }`. A poisoned HTTP client cache no longer fails every later request.
+- `bulkapi::QueryClient::get_results` turned a negative `max_records` into a huge limit.
+
+## [0.19.0]
 
 ### Added
 - `restapi::Client::query(soql)` executes a SOQL query via `GET /query` and returns the first batch of results. It works against any queryable object, so custom settings and custom metadata types (`SELECT Name, Value__c FROM My_Setting__c`) can now be read through the SDK.
@@ -16,7 +42,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Changed
 - `DEFAULT_API_VERSION` is now `68.0` (Winter '27), up from `65.0` (Winter '26). Every client built without `.api_version(...)` (REST, Bulk 2.0, Tooling, SOAP) now targets v68.0, as do the server defaults in the bundled OpenAPI specs. Winter '27 finished rolling out to production orgs on 2026-10-09; to keep the previous behaviour, pin it with `.api_version("65.0")` on the client builder.
 
-## [0.18.0] - 2026-09-12
+## [0.18.0]
 
 ### Added
 - `restapi::Client::get_deleted(sobject_type, start..end)` retrieves the IDs and deletion datetimes of records deleted within a time window, via `GET /sobjects/{sObjectType}/deleted`. The window is a `Range<DateTime<Utc>>`, so it reads directionally at the call site and carries the half-open `[start, end)` semantics the endpoint already has. Returns a `GetDeleted` builder dispatched with `.send().await`, supporting the same per-call `.header()` / `.headers()` plumbing as the other SObject operations.
@@ -28,7 +54,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - Workspace lints are now declared centrally in `[workspace.lints.clippy]` and opted into by `salesforce-core`: `clippy::all` is denied, and `allow_attributes` / `allow_attributes_without_reason` require suppressions to be written as `#[expect(lint, reason = "...")]`. Because clippy reports an `#[expect]` that no longer applies, obsolete suppressions surface instead of lingering silently.
 - Removed a crate-wide `#![allow(clippy::result_large_err)]` from `lib.rs` and `#[allow(clippy::type_complexity)]` from `client::Client`, and finished the boxing that 0.17.0 began: `restapi::search::Error::SearchApi`, `restapi::flow::Error::FlowApi`, `bulkapi::ingest::Error::BulkApi`, and `bulkapi::query::Error::BulkApi` now box their `GeneratedError` source, matching `restapi::sobject` and `restapi::composite`. The variants still expose the same `#[source]` accessor, so this is not a breaking change.
 
-## [0.17.0] - 2026-06-29
+## [0.17.0]
 
 ### Added
 - Per-call Salesforce request headers on every REST and Composite operation via a reqwest-style request builder. Each method now returns a dedicated builder type that supports `.header(name, value)` / `.headers(map)` and is dispatched with `.send().await`. This unblocks `Sforce-Duplicate-Rule-Header: allowSave=true` and any other Salesforce request header (`Sforce-Auto-Assign`, `Sforce-Call-Options`, `Sforce-Mru`, …).
@@ -50,7 +76,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `#[cfg_attr(feature = "trace", tracing::instrument(skip_all))]` is now applied uniformly to every public async method across `restapi`, `bulkapi`, `pubsubapi`, `soapapi`, `toolingapi`, and `client`.
 - The `bulkapi` feature now activates `futures-util` (previously gated only behind `pubsubapi`). Consumers of `bulkapi::ByteStream` need `StreamExt` to drive the stream, so a `--features bulkapi` build now compiles standalone — including the example.
 
-## [0.16.0] - 2026-06-17
+## [0.16.0]
 
 ### Added
 - `is_retryable(&self) -> bool` method on every public `Error` enum in `salesforce_core`. Consumers (e.g. flowgen) can now collapse retry classification to a single call instead of pattern-matching on inner progenitor / tonic types. Added on: `client::Error`, `http::Error`, `pubsubapi::Error`, `toolingapi::Error`, `soapapi::merge::Error`, `restapi::search::Error`, `restapi::sobject::Error`, `restapi::composite::Error`, `restapi::flow::Error`, `bulkapi::ingest::Error`, `bulkapi::query::Error`.
@@ -62,7 +88,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Changed
 - **Breaking:** `soapapi::merge::Error::MergeApi` variant shape changed from `{ message: String }` to `{ status: u16, fault_code: Option<String>, message: String }` so callers can distinguish transient 5xx faults from permanent SOAP faults. The merge call site now extracts `<faultcode>` alongside the existing `<faultstring>`.
 
-## [0.15.0] - 2026-06-02
+## [0.15.0]
 
 ### Added
 - `restapi::Client::invoke_flow()` — invoke an autolaunched Salesforce Flow via the Custom Invocable Actions REST endpoint (`POST /actions/custom/flow/{flowApiName}`). Accepts a single JSON object of input variables.
@@ -73,7 +99,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Fixed
 - `client::Client::reconnect()` now writes into the existing `RwLock<TokenState>` instead of replacing the `Arc`. Previously, cloned clients (held by `restapi::Client`, `bulkapi::Client`, etc.) would keep a stale token after the original client reconnected.
 
-## [0.14.0] - 2026-05-11
+## [0.14.0]
 
 ### Added
 - `soapapi` module — new feature-gated module for Salesforce SOAP API operations not available through the REST API.
@@ -84,7 +110,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Changed
 - Release workflow now extracts changelog entries for GitHub Release notes instead of using the last commit message. Falls back to git log when no CHANGELOG.md section exists for the version.
 
-## [0.13.6] - 2026-05-01
+## [0.13.6]
 
 ### Added
 - Cargo features `restapi`, `bulkapi`, `toolingapi`, `pubsubapi` to gate each API surface so users can opt out of unused generated clients (and, for `pubsubapi`, the `tonic`/`futures-util` gRPC stack). All four are enabled by default — existing users see no change. Slim builds use `default-features = false` and opt in to only what they need.
@@ -93,7 +119,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - Per-API doctest blocks moved out of the crate root in `lib.rs`; module-level docs already carry the same examples and now drop out of the build cleanly when their feature is disabled.
 - `tests/bulkapi.rs` imports `CreateQueryJobRequest`/`QueryOperation` from `salesforce_core::bulkapi` instead of the (now optional) generated crate.
 
-## [0.13.5] - 2026-04-29
+## [0.13.5]
 
 ### Fixed
 - docs.rs builds for the generated crates (`salesforce_core_bulkapi`, `salesforce_core_restapi`, `salesforce_core_toolingapi`, `salesforce_core_pubsubapi`). Build scripts now emit generated code into `OUT_DIR` instead of writing back into `src/`, which fails on docs.rs's read-only sandbox.
@@ -101,7 +127,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Removed
 - Committed `src/generated.rs` files in the four generated crates (and `src/eventbus.v1.rs` in `pubsubapi`). They were build-script outputs that no longer need to be tracked in git.
 
-## [0.13.4] - 2026-04-28
+## [0.13.4]
 
 ### Added
 - `restapi::Client::basic_info()` — `GET /sobjects/{type}` returning recently viewed records.

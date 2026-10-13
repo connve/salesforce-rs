@@ -6,6 +6,7 @@
 
 use super::Client;
 use crate::client;
+use secrecy::ExposeSecret;
 use serde_json::Value;
 
 /// Result of a successful merge operation.
@@ -53,6 +54,16 @@ pub enum Error {
         /// SOAP `<faultstring>` or other human-readable error message.
         message: String,
     },
+
+    /// A key in `master_field_overrides` is not a field API name (a letter
+    /// followed by letters, digits, or underscores). Field names become XML
+    /// element names in the SOAP request, so they are checked before it is
+    /// sent.
+    #[error("Invalid field name `{name}`")]
+    InvalidFieldName {
+        /// The rejected field name.
+        name: String,
+    },
 }
 
 impl Error {
@@ -80,12 +91,22 @@ impl Error {
                 }
                 *status == 429 || (500..600).contains(status)
             }
+            Error::InvalidFieldName { .. } => false,
         }
     }
 }
 
 fn is_reqwest_retryable(err: &reqwest::Error) -> bool {
     err.is_timeout() || err.is_connect()
+}
+
+/// Whether `name` is a field API name and so safe to use as an XML element
+/// name: a letter followed by letters, digits, or underscores. This covers
+/// custom (`Score__c`) and namespaced (`ns__Score__c`) fields.
+fn is_field_api_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 impl Client {
@@ -116,7 +137,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -152,22 +173,15 @@ impl Client {
         master_field_overrides: Option<&serde_json::Map<String, Value>>,
         allow_duplicate_save: bool,
     ) -> Result<MergeResponse, Error> {
-        let sobject_type = sobject_type.as_ref();
-        let master_record_id = master_record_id.as_ref();
-
-        let http_client = self.get_http_client().await.map_err(|e| match e {
-            crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
-                source: client::Error::LockError,
-            },
-            crate::http::Error::Build { source } => Error::Communication { source },
-        })?;
-
-        let soap_url = self.soap_url().map_err(|source| Error::Auth { source })?;
+        let sobject_type = xml_escape(sobject_type.as_ref());
+        let master_record_id = xml_escape(master_record_id.as_ref());
 
         let mut field_elements = String::new();
         if let Some(fields) = master_field_overrides {
             for (name, value) in fields {
+                if !is_field_api_name(name) {
+                    return Err(Error::InvalidFieldName { name: name.clone() });
+                }
                 let val_str = match value {
                     Value::String(s) => xml_escape(s),
                     Value::Null => String::new(),
@@ -187,6 +201,11 @@ impl Client {
             })
             .collect();
 
+        let http_client = self.get_http_client().await.map_err(|e| match e {
+            crate::http::Error::Auth { source } => Error::Auth { source },
+            crate::http::Error::Build { source } => Error::Communication { source },
+        })?;
+        let soap_url = self.soap_url().map_err(|source| Error::Auth { source })?;
         let token = self
             .auth_client
             .access_token()
@@ -222,7 +241,7 @@ impl Client {
     </sf:merge>
   </soapenv:Body>
 </soapenv:Envelope>"#,
-            session_id = xml_escape(&token),
+            session_id = xml_escape(token.expose_secret()),
         );
 
         let response = http_client
@@ -319,6 +338,24 @@ mod tests {
             xml_escape("a&b<c>d\"e'f"),
             "a&amp;b&lt;c&gt;d&quot;e&apos;f"
         );
+    }
+
+    #[test]
+    fn test_field_api_names_are_accepted() {
+        for name in ["BillingCity", "Score__c", "ns__Score__c", "A1"] {
+            assert!(is_field_api_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn test_field_names_that_could_inject_xml_are_rejected() {
+        for name in ["", "1Field", "Name><x", "Name/", "a b", "a:b", "Näme"] {
+            assert!(!is_field_api_name(name), "{name}");
+        }
+        assert!(!Error::InvalidFieldName {
+            name: "x>".to_string(),
+        }
+        .is_retryable());
     }
 
     #[test]

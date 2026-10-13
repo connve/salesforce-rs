@@ -6,30 +6,23 @@
 //! when the access token changes (e.g., after a refresh or re-authentication).
 
 use crate::client;
-use reqwest::header::{HeaderMap, AUTHORIZATION};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use secrecy::{ExposeSecret, SecretString};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::RwLock;
+use std::sync::{PoisonError, RwLock};
 use std::time::Duration;
 
 /// Error type for HTTP client building.
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
-    /// Failed to retrieve access token from auth client.
+    /// Failed to retrieve a usable access token from the auth client.
     #[error("Failed to get access token: {source}")]
     Auth {
         #[source]
         source: client::Error,
     },
-
-    /// Failed to construct HTTP headers (e.g., invalid token format).
-    #[error("Failed to create HTTP headers")]
-    InvalidHeader,
-
-    /// Failed to acquire lock on HTTP client cache.
-    #[error("Failed to acquire lock on HTTP client cache")]
-    Lock,
 
     /// Failed to build the HTTP client.
     #[error("Failed to build HTTP client: {source}")]
@@ -39,24 +32,12 @@ pub enum Error {
     },
 }
 
-#[cfg(feature = "restapi")]
-impl Error {
-    /// Returns `true` if the error is transient and the operation could
-    /// succeed if retried.
-    pub fn is_retryable(&self) -> bool {
-        match self {
-            Error::Auth { source } => source.is_retryable(),
-            Error::Build { source } => source.is_timeout() || source.is_connect(),
-            Error::InvalidHeader | Error::Lock => false,
-        }
-    }
-}
-
 /// Cached HTTP client paired with the token and header-set it was built for.
 #[derive(Debug)]
 pub(crate) struct CachedHttpClient {
-    /// The cached token string used to build the current client.
-    token: String,
+    /// The cached token used to build the current client. Redacted from
+    /// `Debug` output, like every API client that holds this cache.
+    token: SecretString,
     /// Hash of the client-level extra headers the cached client was built with.
     headers_hash: u64,
     /// The cached reqwest::Client built with that token + headers.
@@ -94,21 +75,32 @@ impl HttpClientCache {
             .map_err(|source| Error::Auth { source })?;
         let headers_hash = hash_header_map(extra_headers);
 
+        // The cache only ever holds a fully built client, so a panic in another
+        // thread can't leave it half-written: recover from poisoning instead of
+        // failing every later request.
+
         // Fast path: check if cached client has the same token and headers.
         {
-            let cache = self.cache.read().map_err(|_| Error::Lock)?;
+            let cache = self.cache.read().unwrap_or_else(PoisonError::into_inner);
             if let Some(cached) = cache.as_ref() {
-                if cached.token == token && cached.headers_hash == headers_hash {
+                if cached.token.expose_secret() == token.expose_secret()
+                    && cached.headers_hash == headers_hash
+                {
                     return Ok(cached.client.clone());
                 }
             }
         }
 
         // Token or headers changed (or first call): build a new client.
-        let client = build_http_client(&token, connect_timeout, request_timeout, extra_headers)?;
+        let client = build_http_client(
+            token.expose_secret(),
+            connect_timeout,
+            request_timeout,
+            extra_headers,
+        )?;
 
         {
-            let mut cache = self.cache.write().map_err(|_| Error::Lock)?;
+            let mut cache = self.cache.write().unwrap_or_else(PoisonError::into_inner);
             *cache = Some(CachedHttpClient {
                 token,
                 headers_hash,
@@ -122,18 +114,14 @@ impl HttpClientCache {
 
 /// Builds an HTTP client with the given bearer token, extra headers, and
 /// timeout configuration.
-pub(crate) fn build_http_client(
+fn build_http_client(
     token: &str,
     connect_timeout: Duration,
     request_timeout: Duration,
     extra_headers: &HeaderMap,
 ) -> Result<reqwest::Client, Error> {
     let mut headers = HeaderMap::new();
-    headers.insert(
-        AUTHORIZATION,
-        reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-            .map_err(|_| Error::InvalidHeader)?,
-    );
+    headers.insert(AUTHORIZATION, authorization_header(token)?);
     for (name, value) in extra_headers.iter() {
         headers.append(name.clone(), value.clone());
     }
@@ -149,6 +137,16 @@ pub(crate) fn build_http_client(
         .map_err(|source| Error::Build { source })
 }
 
+/// `Bearer <token>`, marked sensitive so `Debug` output of the header (and of
+/// the `reqwest::Client` holding it) redacts the token.
+fn authorization_header(token: &str) -> Result<HeaderValue, Error> {
+    let mut value = HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| Error::Auth {
+        source: client::Error::InvalidAccessToken,
+    })?;
+    value.set_sensitive(true);
+    Ok(value)
+}
+
 /// Order-independent hash over a [`HeaderMap`], used as part of the cache key.
 fn hash_header_map(headers: &HeaderMap) -> u64 {
     let mut entries: Vec<(&str, &[u8])> = headers
@@ -161,10 +159,63 @@ fn hash_header_map(headers: &HeaderMap) -> u64 {
     hasher.finish()
 }
 
+/// A value rejected by [`check_path_segments`]. Each operation module converts
+/// it into its own `Error::InvalidPathSegment` with `From`, so `?` works.
+#[cfg(any(feature = "restapi", feature = "bulkapi"))]
+#[derive(Debug)]
+pub(crate) struct InvalidPathSegment {
+    pub(crate) segment: String,
+}
+
+/// Rejects the first value that can't be sent as a single URL path segment:
+/// empty, `.`, `..`, or containing control characters.
+///
+/// The generated clients percent-encode `/` but not dots, so `..` would be
+/// resolved by the URL parser and hit a different endpoint.
+#[cfg(any(feature = "restapi", feature = "bulkapi"))]
+pub(crate) fn check_path_segments(segments: &[&str]) -> Result<(), InvalidPathSegment> {
+    let invalid = segments.iter().find(|segment| {
+        segment.is_empty()
+            || **segment == "."
+            || **segment == ".."
+            || segment.contains(char::is_control)
+    });
+    match invalid {
+        Some(segment) => Err(InvalidPathSegment {
+            segment: (*segment).to_string(),
+        }),
+        None => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqwest::header::{HeaderName, HeaderValue};
+    use reqwest::header::HeaderName;
+
+    #[cfg(any(feature = "restapi", feature = "bulkapi"))]
+    #[test]
+    fn test_check_path_segments_rejects_dot_segments() {
+        for bad in ["", ".", "..", "001\n"] {
+            assert!(matches!(
+                check_path_segments(&["Account", bad]),
+                Err(InvalidPathSegment { ref segment }) if segment == bad
+            ));
+        }
+    }
+
+    #[cfg(any(feature = "restapi", feature = "bulkapi"))]
+    #[test]
+    fn test_check_path_segments_accepts_ids() {
+        assert!(check_path_segments(&["Account", "001xx000003DGb2AAG", "a.b"]).is_ok());
+    }
+
+    #[test]
+    fn test_authorization_header_is_sensitive() {
+        let value = authorization_header("token").expect("valid token");
+        assert!(value.is_sensitive());
+        assert_eq!(value, "Bearer token");
+    }
 
     #[test]
     fn test_error_source_chain_preserved() {

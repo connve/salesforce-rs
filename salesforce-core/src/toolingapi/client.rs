@@ -110,7 +110,7 @@ impl ClientBuilder {
     /// let auth_client = client::Builder::new()
     ///     .credentials(Credentials {
     ///         client_id: "...".to_string(),
-    ///         client_secret: Some("...".to_string()),
+    ///         client_secret: Some("...".into()),
     ///         username: None,
     ///         password: None,
     ///         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -242,9 +242,6 @@ impl Client {
             .await
             .map_err(|e| match e {
                 crate::http::Error::Auth { source } => Error::Auth { source },
-                crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
-                    source: client::Error::LockError,
-                },
                 crate::http::Error::Build { source } => Error::Communication { source },
             })
     }
@@ -275,7 +272,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),

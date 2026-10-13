@@ -2,7 +2,9 @@
 
 use super::Client;
 use crate::client;
-use salesforce_core_restapi::types::{FlowInvokeRequest, FlowInvokeResponse};
+use crate::http::{check_path_segments, InvalidPathSegment};
+use reqwest::header::HeaderMap;
+use salesforce_core_restapi::types::{ErrorResponse, FlowInvokeRequest, FlowInvokeResponse};
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
 
@@ -21,7 +23,7 @@ pub enum Error {
     #[error("Flow API error: {source}")]
     FlowApi {
         #[source]
-        source: Box<GeneratedError<salesforce_core_restapi::types::ErrorResponse>>,
+        source: Box<GeneratedError<ErrorResponse>>,
     },
 
     /// Network-level communication failure.
@@ -34,17 +36,29 @@ pub enum Error {
     /// Input variables must be a JSON object.
     #[error("Expected JSON object for flow inputs, got {actual_type}")]
     InvalidInputType { actual_type: String },
+
+    /// The flow API name is empty, `.`, `..`, or contains control characters.
+    /// Caught before the request is sent.
+    #[error("Invalid path segment `{segment}`")]
+    InvalidPathSegment {
+        /// The rejected value.
+        segment: String,
+    },
 }
 
 impl Error {
     /// Returns `true` if the error is transient and the operation could
     /// succeed if retried.
+    ///
+    /// This only says the failure may be transient. The flow can have run
+    /// before a timeout or 5xx reached you, so retrying runs it again. Retry
+    /// only flows that are safe to run twice.
     pub fn is_retryable(&self) -> bool {
         match self {
             Error::Auth { source } => source.is_retryable(),
             Error::FlowApi { source } => source.is_retryable(),
             Error::Communication { source } => source.is_timeout() || source.is_connect(),
-            Error::InvalidInputType { .. } => false,
+            Error::InvalidInputType { .. } | Error::InvalidPathSegment { .. } => false,
         }
     }
 }
@@ -74,7 +88,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -152,7 +166,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -187,15 +201,14 @@ impl Client {
         request: &FlowInvokeRequest,
     ) -> Result<FlowInvokeResponse, Error> {
         let flow_api_name = flow_api_name.as_ref();
+        check_path_segments(&[flow_api_name])
+            .map_err(|InvalidPathSegment { segment }| Error::InvalidPathSegment { segment })?;
         let http_client = self.get_http_client().await.map_err(|e| match e {
             crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
-                source: client::Error::LockError,
-            },
             crate::http::Error::Build { source } => Error::Communication { source },
         })?;
         let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        let client = GeneratedClient::new_with_client(&base_url, http_client, HeaderMap::new());
 
         let response = client
             .invoke_flow(flow_api_name, request)

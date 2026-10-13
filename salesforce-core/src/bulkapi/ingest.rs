@@ -2,7 +2,8 @@
 
 use super::Client as BulkClient;
 use crate::client;
-use salesforce_core_bulkapi::types::{CreateIngestJobRequest, IngestJobInfo};
+use crate::http::{check_path_segments, InvalidPathSegment};
+use salesforce_core_bulkapi::types::{CreateIngestJobRequest, ErrorResponse, IngestJobInfo};
 use salesforce_core_bulkapi::{Client as GeneratedClient, Error as GeneratedError};
 
 /// Client for Bulk API v2.0 Ingest operations.
@@ -20,18 +21,22 @@ impl IngestClient {
         Self { bulk_client }
     }
 
-    /// Gets a cached HTTP client with authentication headers and connection pooling.
-    async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        self.bulk_client
+    /// The generated client, backed by the cached HTTP client so connections
+    /// are reused across calls.
+    async fn generated(&self) -> Result<GeneratedClient, Error> {
+        let http_client = self
+            .bulk_client
             .get_http_client()
             .await
             .map_err(|e| match e {
                 crate::http::Error::Auth { source } => Error::Auth { source },
-                crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
-                    source: client::Error::LockError,
-                },
                 crate::http::Error::Build { source } => Error::Communication { source },
-            })
+            })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
+        Ok(GeneratedClient::new_with_client(&base_url, http_client))
     }
 
     /// Creates a new bulk ingest job.
@@ -58,7 +63,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -92,12 +97,7 @@ impl IngestClient {
         &self,
         request: &CreateIngestJobRequest,
     ) -> Result<IngestJobInfo, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        let client = self.generated().await?;
 
         let response = client
             .create_ingest_job(request)
@@ -127,7 +127,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -148,12 +148,8 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_job(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .get_ingest_job(job_id)
@@ -182,7 +178,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -201,12 +197,8 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn upload_data(&self, job_id: &str, csv_data: &[u8]) -> Result<(), Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         client
             .upload_ingest_job_data(job_id, csv_data.to_vec())
@@ -237,7 +229,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -258,12 +250,8 @@ impl IngestClient {
     pub async fn mark_upload_complete(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
         use salesforce_core_bulkapi::types::{JobState, UpdateIngestJobStateBody};
 
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .update_ingest_job_state(
@@ -300,7 +288,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -321,12 +309,8 @@ impl IngestClient {
     pub async fn abort_job(&self, job_id: &str) -> Result<IngestJobInfo, Error> {
         use salesforce_core_bulkapi::types::{JobState, UpdateIngestJobStateBody};
 
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .update_ingest_job_state(
@@ -359,7 +343,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -377,12 +361,8 @@ impl IngestClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn delete_job(&self, job_id: &str) -> Result<(), Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         client
             .delete_ingest_job(job_id)
@@ -414,7 +394,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -439,12 +419,8 @@ impl IngestClient {
         &self,
         job_id: &str,
     ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .get_ingest_job_successful_results(job_id)
@@ -476,7 +452,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -501,12 +477,8 @@ impl IngestClient {
         &self,
         job_id: &str,
     ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .get_ingest_job_failed_results(job_id)
@@ -538,7 +510,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -563,12 +535,8 @@ impl IngestClient {
         &self,
         job_id: &str,
     ) -> Result<salesforce_core_bulkapi::ByteStream, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .get_ingest_job_unprocessed_results(job_id)
@@ -601,7 +569,7 @@ impl IngestClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -628,12 +596,7 @@ impl IngestClient {
         job_type: Option<salesforce_core_bulkapi::types::JobType>,
         query_locator: Option<&str>,
     ) -> Result<salesforce_core_bulkapi::types::GetAllIngestJobsResponse, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        let client = self.generated().await?;
 
         let response = client
             .get_all_ingest_jobs(is_pk_chunking_enabled, job_type, query_locator)
@@ -661,7 +624,7 @@ pub enum Error {
     #[error("Bulk API error: {source}")]
     BulkApi {
         #[source]
-        source: Box<GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>>,
+        source: Box<GeneratedError<ErrorResponse>>,
     },
 
     /// Network-level communication failure.
@@ -675,6 +638,14 @@ pub enum Error {
         #[source]
         source: reqwest::Error,
     },
+
+    /// The job ID is empty, `.`, `..`, or contains control characters.
+    /// Caught before the request is sent.
+    #[error("Invalid path segment `{segment}`")]
+    InvalidPathSegment {
+        /// The rejected value.
+        segment: String,
+    },
 }
 
 impl Error {
@@ -685,13 +656,19 @@ impl Error {
             Error::Auth { source } => source.is_retryable(),
             Error::BulkApi { source } => source.is_retryable(),
             Error::Communication { source } => source.is_timeout() || source.is_connect(),
+            Error::InvalidPathSegment { .. } => false,
         }
     }
 }
 
-fn classify_generated_error(
-    err: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
-) -> Error {
+fn require_path_segments(segments: &[&str]) -> Result<(), Error> {
+    check_path_segments(segments)
+        .map_err(|InvalidPathSegment { segment }| Error::InvalidPathSegment { segment })
+}
+
+/// Transport failures become [`Error::Communication`]; everything else the
+/// generated client reports is a Salesforce API error.
+fn classify_generated_error(err: GeneratedError<ErrorResponse>) -> Error {
     match err {
         GeneratedError::CommunicationError(source)
         | GeneratedError::InvalidUpgrade(source)
@@ -701,6 +678,3 @@ fn classify_generated_error(
         },
     }
 }
-
-#[cfg(test)]
-mod tests {}

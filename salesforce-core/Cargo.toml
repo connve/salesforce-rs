@@ -7,7 +7,6 @@ edition.workspace = true
 rust-version.workspace = true
 description = "Unofficial Rust SDK for Salesforce Core APIs (Sales, Service, Platform)"
 repository.workspace = true
-homepage.workspace = true
 documentation.workspace = true
 readme = "README.md"
 keywords.workspace = true
@@ -44,6 +43,7 @@ oauth2 = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+secrecy = { workspace = true }
 tonic = { workspace = true, optional = true }
 tracing = { workspace = true }
 futures-util = { workspace = true, optional = true }

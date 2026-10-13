@@ -1527,7 +1527,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "salesforce_core"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "chrono",
  "futures-util",
@@ -1537,6 +1537,7 @@ dependencies = [
  "salesforce_core_pubsubapi",
  "salesforce_core_restapi",
  "salesforce_core_toolingapi",
+ "secrecy",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -1550,78 +1551,60 @@ dependencies = [
 
 [[package]]
 name = "salesforce_core_bulkapi"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
- "bytes",
  "chrono",
- "futures-util",
  "openapiv3",
  "progenitor",
  "progenitor-client",
  "reqwest 0.13.5",
  "serde",
- "serde_json",
  "serde_yaml",
- "thiserror 2.0.21",
  "url",
 ]
 
 [[package]]
 name = "salesforce_core_pubsubapi"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "bytes",
- "futures-util",
- "oauth2",
  "prost",
  "prost-build",
- "prost-types",
  "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
  "tokio-stream",
- "tokio-util",
  "tonic",
  "tonic-build",
  "tonic-prost",
  "tonic-prost-build",
- "url",
 ]
 
 [[package]]
 name = "salesforce_core_restapi"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
- "bytes",
  "chrono",
- "futures-util",
  "openapiv3",
  "progenitor",
  "progenitor-client",
+ "quote",
  "reqwest 0.13.5",
  "serde",
  "serde_json",
  "serde_yaml",
- "thiserror 2.0.21",
+ "tokio",
  "url",
 ]
 
 [[package]]
 name = "salesforce_core_toolingapi"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
- "bytes",
- "chrono",
- "futures-util",
  "openapiv3",
  "progenitor",
  "progenitor-client",
  "reqwest 0.13.5",
  "serde",
- "serde_json",
  "serde_yaml",
- "thiserror 2.0.21",
  "url",
 ]
 
@@ -1667,6 +1650,16 @@ dependencies = [
  "quote",
  "serde_derive_internals",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "serde",
+ "zeroize",
 ]
 
 [[package]]

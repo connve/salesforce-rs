@@ -16,7 +16,8 @@ jobs:
         with:
           submodules: recursive
 
-      # Reads channel + components from `rust-toolchain.toml`.
+      # rustup installs the toolchain pinned in `rust-toolchain.toml` on the
+      # first cargo call.
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-audit

@@ -7,7 +7,7 @@
 
 use super::headers::{impl_header_methods, HeaderBag, InvalidHeader};
 use super::Client;
-use salesforce_core_restapi::types::QueryResponse;
+use salesforce_core_restapi::types::{ErrorResponse, QueryResponse};
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 
 /// Error type for SOQL query operations.
@@ -27,20 +27,20 @@ pub enum Error {
     QueryApi {
         /// The underlying API error.
         #[source]
-        source: Box<GeneratedError<salesforce_core_restapi::types::ErrorResponse>>,
+        source: Box<GeneratedError<ErrorResponse>>,
     },
 
     /// Error building HTTP client.
     #[error("Failed to build HTTP client: {source}")]
     HttpClient {
-        /// The underlying HTTP client error.
+        /// The underlying reqwest error.
         #[source]
-        source: crate::http::Error,
+        source: reqwest::Error,
     },
 
-    /// A request header is either reserved by the SDK (`Authorization`,
-    /// `Content-Type`, `Accept`) or could not be converted into a valid
-    /// `HeaderName` / `HeaderValue`.
+    /// A request header is either reserved (`Authorization`, `Content-Type`,
+    /// `Accept`, `Content-Length`, `Transfer-Encoding`, `Host`) or could not be
+    /// converted into a valid `HeaderName` / `HeaderValue`.
     #[error("Invalid request header `{name}`")]
     InvalidHeader {
         /// The header name that was rejected.
@@ -60,15 +60,16 @@ impl Error {
     /// Returns `true` if the error is transient and the operation could
     /// succeed if retried.
     ///
-    /// `Auth`, `QueryApi`, and `HttpClient` defer to their source's
-    /// classification (429 and 5xx responses and transport failures are
-    /// retryable). `InvalidHeader` and `InvalidNextRecordsUrl` are rejected
-    /// before a request is sent and are never retryable.
+    /// `Auth` and `QueryApi` defer to their source's classification (429 and
+    /// 5xx responses and transport failures are retryable), and `HttpClient`
+    /// is retryable on a timeout or connect failure. `InvalidHeader` and
+    /// `InvalidNextRecordsUrl` are rejected before a request is sent and are
+    /// never retryable.
     pub fn is_retryable(&self) -> bool {
         match self {
             Error::Auth { source } => source.is_retryable(),
             Error::QueryApi { source } => source.is_retryable(),
-            Error::HttpClient { source } => source.is_retryable(),
+            Error::HttpClient { source } => source.is_timeout() || source.is_connect(),
             Error::InvalidHeader { .. } | Error::InvalidNextRecordsUrl { .. } => false,
         }
     }
@@ -81,22 +82,26 @@ fn query_locator(next_records_url: &str) -> Option<&str> {
         Some((_, locator)) => locator,
         None => next_records_url,
     };
-    (!locator.is_empty() && !locator.contains('/')).then_some(locator)
+    (!locator.contains('/') && crate::http::check_path_segments(&[locator]).is_ok())
+        .then_some(locator)
 }
 
-async fn http_client_with(client: &Client, bag: HeaderBag) -> Result<reqwest::Client, Error> {
-    let extra = bag
+/// The generated client for one request: the shared, cached HTTP client plus
+/// the request's per-call headers.
+async fn generated(client: &Client, headers: HeaderBag) -> Result<GeneratedClient, Error> {
+    let headers = headers
         .finish()
         .map_err(|InvalidHeader { name }| Error::InvalidHeader { name })?;
-    client
-        .get_http_client_with_extra(&extra)
-        .await
-        .map_err(|source| Error::HttpClient { source })
-}
-
-fn generated(client: &Client, http_client: reqwest::Client) -> Result<GeneratedClient, Error> {
+    let http_client = client.get_http_client().await.map_err(|e| match e {
+        crate::http::Error::Auth { source } => Error::Auth { source },
+        crate::http::Error::Build { source } => Error::HttpClient { source },
+    })?;
     let base_url = client.base_url().map_err(|source| Error::Auth { source })?;
-    Ok(GeneratedClient::new_with_client(&base_url, http_client))
+    Ok(GeneratedClient::new_with_client(
+        &base_url,
+        http_client,
+        headers,
+    ))
 }
 
 /// Builder for [`Client::query`].
@@ -113,8 +118,7 @@ impl<'a> Query<'a> {
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<QueryResponse, Error> {
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        let gen = generated(self.client, self.headers).await?;
         let response = gen
             .query(&self.soql)
             .await
@@ -139,8 +143,7 @@ impl<'a> QueryAll<'a> {
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<QueryResponse, Error> {
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        let gen = generated(self.client, self.headers).await?;
         let response = gen
             .query_all(&self.soql)
             .await
@@ -172,8 +175,7 @@ impl<'a> QueryMore<'a> {
             query_locator(&self.next_records_url).ok_or_else(|| Error::InvalidNextRecordsUrl {
                 url: self.next_records_url.clone(),
             })?;
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        let gen = generated(self.client, self.headers).await?;
         let response = gen
             .query_more(locator)
             .await
@@ -205,7 +207,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://localhost".to_string(),
@@ -293,6 +295,18 @@ mod tests {
         assert_eq!(
             query_locator(&format!(
                 "/services/data/v{}/query/",
+                crate::DEFAULT_API_VERSION
+            )),
+            None
+        );
+    }
+
+    #[test]
+    fn test_query_locator_rejects_dot_segments() {
+        assert_eq!(query_locator(".."), None);
+        assert_eq!(
+            query_locator(&format!(
+                "/services/data/v{}/query/..",
                 crate::DEFAULT_API_VERSION
             )),
             None

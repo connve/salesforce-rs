@@ -3,6 +3,7 @@
 mod common;
 
 use salesforce_core::client::{self, Credentials};
+use salesforce_core::secrecy::ExposeSecret;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -16,7 +17,7 @@ async fn test_client_credentials_connect() -> Result {
     assert!(client.tenant_id.is_some());
 
     let token = client.access_token().await?;
-    assert!(!token.is_empty());
+    assert!(!token.expose_secret().is_empty());
 
     Ok(())
 }
@@ -29,7 +30,7 @@ async fn test_access_token_is_cached() -> Result {
 
     let token1 = client.access_token().await?;
     let token2 = client.access_token().await?;
-    assert_eq!(token1, token2);
+    assert_eq!(token1.expose_secret(), token2.expose_secret());
 
     Ok(())
 }
@@ -44,8 +45,8 @@ async fn test_reconnect() -> Result {
     client.reconnect().await?;
     let token_after = client.access_token().await?;
 
-    assert!(!token_before.is_empty());
-    assert!(!token_after.is_empty());
+    assert!(!token_before.expose_secret().is_empty());
+    assert!(!token_after.expose_secret().is_empty());
 
     Ok(())
 }
@@ -55,7 +56,7 @@ async fn test_invalid_credentials_rejected() -> Result {
     let result = client::Builder::new()
         .credentials(Credentials {
             client_id: "invalid_id".to_string(),
-            client_secret: Some("invalid_secret".to_string()),
+            client_secret: Some("invalid_secret".into()),
             username: None,
             password: None,
             instance_url: "https://login.salesforce.com".to_string(),
