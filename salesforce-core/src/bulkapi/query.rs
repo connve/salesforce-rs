@@ -2,8 +2,10 @@
 
 use super::Client as BulkClient;
 use crate::client;
-use salesforce_core_bulkapi::types::{CreateQueryJobRequest, QueryJobInfo};
+use crate::http::{check_path_segments, InvalidPathSegment};
+use salesforce_core_bulkapi::types::{CreateQueryJobRequest, ErrorResponse, QueryJobInfo};
 use salesforce_core_bulkapi::{ByteStream, Client as GeneratedClient, Error as GeneratedError};
+use std::num::NonZeroU64;
 
 /// Client for Bulk API v2.0 Query operations.
 ///
@@ -20,18 +22,22 @@ impl QueryClient {
         Self { bulk_client }
     }
 
-    /// Gets a cached HTTP client with authentication headers and connection pooling.
-    async fn build_http_client(&self) -> Result<reqwest::Client, Error> {
-        self.bulk_client
+    /// The generated client, backed by the cached HTTP client so connections
+    /// are reused across calls.
+    async fn generated(&self) -> Result<GeneratedClient, Error> {
+        let http_client = self
+            .bulk_client
             .get_http_client()
             .await
             .map_err(|e| match e {
                 crate::http::Error::Auth { source } => Error::Auth { source },
-                crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
-                    source: client::Error::LockError,
-                },
                 crate::http::Error::Build { source } => Error::Communication { source },
-            })
+            })?;
+        let base_url = self
+            .bulk_client
+            .base_url()
+            .map_err(|source| Error::Auth { source })?;
+        Ok(GeneratedClient::new_with_client(&base_url, http_client))
     }
 
     /// Creates a new bulk query job.
@@ -55,7 +61,7 @@ impl QueryClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -83,12 +89,7 @@ impl QueryClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn create_job(&self, request: &CreateQueryJobRequest) -> Result<QueryJobInfo, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        let client = self.generated().await?;
 
         let response = client
             .create_query_job(request)
@@ -117,7 +118,7 @@ impl QueryClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -136,12 +137,8 @@ impl QueryClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn get_job(&self, job_id: &str) -> Result<QueryJobInfo, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .get_query_job(job_id)
@@ -158,7 +155,8 @@ impl QueryClient {
     /// # Arguments
     ///
     /// * `job_id` - The unique identifier of the query job
-    /// * `max_records` - Optional maximum number of records to return per request
+    /// * `max_records` - Optional maximum number of records to return per
+    ///   request; `NonZeroU64::new(n)` builds it from a plain number
     /// * `locator` - Optional locator for pagination (from previous response headers)
     ///
     /// # Returns
@@ -169,6 +167,7 @@ impl QueryClient {
     ///
     /// ```no_run
     /// use futures_util::StreamExt;
+    /// use std::num::NonZeroU64;
     /// # use salesforce_core::client::{self, Credentials};
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
@@ -176,7 +175,7 @@ impl QueryClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -189,7 +188,7 @@ impl QueryClient {
     /// let query_client = bulk_client.query();
     ///
     /// let mut results = query_client
-    ///     .get_results("750xx0000000001AAA", Some(5000), None)
+    ///     .get_results("750xx0000000001AAA", NonZeroU64::new(5000), None)
     ///     .await?;
     ///
     /// // Stream the CSV data
@@ -204,21 +203,13 @@ impl QueryClient {
     pub async fn get_results(
         &self,
         job_id: &str,
-        max_records: Option<i64>,
+        max_records: Option<NonZeroU64>,
         locator: Option<&str>,
     ) -> Result<ByteStream, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
-
-        // Convert Option<i64> to Option<NonZero<u64>>
-        let max_records_nz = max_records.and_then(|n| std::num::NonZero::new(n as u64));
-
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
         let response = client
-            .get_query_job_results(job_id, locator, max_records_nz)
+            .get_query_job_results(job_id, locator, max_records)
             .await
             .map_err(classify_generated_error)?;
         Ok(response.into_inner())
@@ -242,7 +233,7 @@ impl QueryClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -260,12 +251,8 @@ impl QueryClient {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn delete_job(&self, job_id: &str) -> Result<(), Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         client
             .delete_query_job(job_id)
@@ -297,7 +284,7 @@ impl QueryClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -318,12 +305,8 @@ impl QueryClient {
     pub async fn abort_job(&self, job_id: &str) -> Result<QueryJobInfo, Error> {
         use salesforce_core_bulkapi::types::{AbortQueryJobBody, AbortQueryJobBodyState};
 
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .abort_query_job(
@@ -362,7 +345,7 @@ impl QueryClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -390,12 +373,7 @@ impl QueryClient {
         concurrency_mode: Option<salesforce_core_bulkapi::types::ConcurrencyMode>,
         query_locator: Option<&str>,
     ) -> Result<salesforce_core_bulkapi::types::QueryJobList, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        let client = self.generated().await?;
 
         let response = client
             .get_all_query_jobs(
@@ -435,7 +413,7 @@ impl QueryClient {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -462,12 +440,8 @@ impl QueryClient {
         job_id: &str,
         locator: Option<&str>,
     ) -> Result<salesforce_core_bulkapi::types::QueryResultPages, Error> {
-        let http_client = self.build_http_client().await?;
-        let base_url = self
-            .bulk_client
-            .base_url()
-            .map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        require_path_segments(&[job_id])?;
+        let client = self.generated().await?;
 
         let response = client
             .get_query_job_result_pages(job_id, locator)
@@ -495,7 +469,7 @@ pub enum Error {
     #[error("Bulk API error: {source}")]
     BulkApi {
         #[source]
-        source: Box<GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>>,
+        source: Box<GeneratedError<ErrorResponse>>,
     },
 
     /// Network-level communication failure.
@@ -509,6 +483,14 @@ pub enum Error {
         #[source]
         source: reqwest::Error,
     },
+
+    /// The job ID is empty, `.`, `..`, or contains control characters.
+    /// Caught before the request is sent.
+    #[error("Invalid path segment `{segment}`")]
+    InvalidPathSegment {
+        /// The rejected value.
+        segment: String,
+    },
 }
 
 impl Error {
@@ -519,13 +501,19 @@ impl Error {
             Error::Auth { source } => source.is_retryable(),
             Error::BulkApi { source } => source.is_retryable(),
             Error::Communication { source } => source.is_timeout() || source.is_connect(),
+            Error::InvalidPathSegment { .. } => false,
         }
     }
 }
 
-fn classify_generated_error(
-    err: GeneratedError<salesforce_core_bulkapi::types::ErrorResponse>,
-) -> Error {
+fn require_path_segments(segments: &[&str]) -> Result<(), Error> {
+    check_path_segments(segments)
+        .map_err(|InvalidPathSegment { segment }| Error::InvalidPathSegment { segment })
+}
+
+/// Transport failures become [`Error::Communication`]; everything else the
+/// generated client reports is a Salesforce API error.
+fn classify_generated_error(err: GeneratedError<ErrorResponse>) -> Error {
     match err {
         GeneratedError::CommunicationError(source)
         | GeneratedError::InvalidUpgrade(source)
@@ -535,6 +523,3 @@ fn classify_generated_error(
         },
     }
 }
-
-#[cfg(test)]
-mod tests {}

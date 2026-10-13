@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit hook to automatically format code and run clippy.
+# Pre-commit hook to check formatting, run clippy, tests, and cargo audit.
 #
 # Pins to the `stable` toolchain explicitly so this hook agrees with CI even
 # when a developer's default `rustup` toolchain is nightly. The repo's
@@ -7,13 +7,38 @@
 # file is missing or overridden.
 TOOLCHAIN=stable
 
-echo "Running cargo fmt..."
-cargo "+$TOOLCHAIN" fmt --all
+# The checks below run on the working tree. Refuse to run when it differs from
+# what is being committed, so a passing hook means the commit itself passes.
+if ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard -- '*.rs' '*.toml' '*.yaml' '*.proto')" ]; then
+    echo "Error: unstaged changes or untracked source files. The hook checks the"
+    echo "working tree, so it would not be checking what you commit."
+    echo "Stage them, or run 'git stash push --keep-index --include-untracked' first."
+    exit 1
+fi
 
-# Add any formatted files back to the commit
-git diff --name-only --cached | grep '\.rs$' | xargs git add
+# Check rather than reformat: re-staging formatted files would also commit
+# unstaged hunks of partially staged files.
+echo "Checking formatting (+$TOOLCHAIN)..."
+if ! cargo "+$TOOLCHAIN" fmt --all -- --check; then
+    echo ""
+    echo "Error: Code is not formatted. Run 'cargo fmt --all', stage the result, and commit again."
+    exit 1
+fi
 
-echo "Running cargo clippy (+$TOOLCHAIN)..."
+if command -v cargo-hack >/dev/null 2>&1; then
+    echo "Running cargo clippy, each feature (+$TOOLCHAIN)..."
+    cargo "+$TOOLCHAIN" hack clippy -p salesforce_core --each-feature --all-targets -- -D warnings
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "Error: Clippy found issues. Please fix them before committing."
+        exit 1
+    fi
+else
+    echo "Warning: cargo-hack not installed. Skipping the per-feature clippy run;"
+    echo "CI runs it. Install with: cargo install cargo-hack"
+fi
+
+echo "Running cargo clippy, all features (+$TOOLCHAIN)..."
 cargo "+$TOOLCHAIN" clippy --workspace --all-targets --all-features -- -D warnings
 if [ $? -ne 0 ]; then
     echo ""
@@ -22,7 +47,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Running cargo test (+$TOOLCHAIN)..."
-cargo "+$TOOLCHAIN" test --workspace
+cargo "+$TOOLCHAIN" test --workspace --all-features
 if [ $? -ne 0 ]; then
     echo ""
     echo "Error: Tests failed. Please fix them before committing."

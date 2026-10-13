@@ -1,5 +1,6 @@
 use oauth2::basic::BasicTokenType;
 use oauth2::{EmptyExtraTokenFields, RefreshToken, TokenResponse};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -87,6 +88,10 @@ pub enum Error {
         #[source]
         source: reqwest::Error,
     },
+    /// The access token contains characters that can't be sent in an HTTP
+    /// header.
+    #[error("Access token is not a valid HTTP header value")]
+    InvalidAccessToken,
 }
 
 impl Error {
@@ -240,7 +245,7 @@ pub enum AuthFlow {
 ///
 /// let creds = Credentials {
 ///     client_id: "your_client_id".to_string(),
-///     client_secret: Some("your_client_secret".to_string()),
+///     client_secret: Some("your_client_secret".into()),
 ///     username: None,
 ///     password: None,
 ///     instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -255,34 +260,35 @@ pub enum AuthFlow {
 ///
 /// let creds = Credentials {
 ///     client_id: "your_client_id".to_string(),
-///     client_secret: Some("your_client_secret".to_string()),
+///     client_secret: Some("your_client_secret".into()),
 ///     username: Some("user@example.com".to_string()),
-///     password: Some("your_password".to_string()),
+///     password: Some("your_password".into()),
 ///     instance_url: "https://your-instance.salesforce.com".to_string(),
 ///     tenant_id: "your_tenant_id".to_string(),
 /// };
 /// ```
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Credentials {
     /// Client ID from the Connected App (Consumer Key).
     pub client_id: String,
     /// Client Secret from the Connected App (Consumer Secret).
     ///
     /// Required for: [`AuthFlow::ClientCredentials`], [`AuthFlow::UsernamePassword`]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub client_secret: Option<String>,
+    ///
+    /// Redacted from `Debug` output and zeroed on drop.
+    pub client_secret: Option<SecretString>,
     /// Username for authentication (email address).
     ///
     /// Required for: [`AuthFlow::UsernamePassword`]
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
     /// Password for authentication.
     ///
     /// Required for: [`AuthFlow::UsernamePassword`]
     ///
     /// **Note:** If your org requires a security token, append it to the password.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub password: Option<String>,
+    ///
+    /// Redacted from `Debug` output and zeroed on drop.
+    pub password: Option<SecretString>,
     /// Salesforce instance URL (e.g., `https://mydomain.salesforce.com`).
     ///
     /// For production orgs, use `https://login.salesforce.com`.
@@ -318,7 +324,7 @@ pub enum CredentialsFrom {
 /// let client = client::Builder::new()
 ///     .credentials(Credentials {
 ///         client_id: "your_client_id".to_string(),
-///         client_secret: Some("your_client_secret".to_string()),
+///         client_secret: Some("your_client_secret".into()),
 ///         username: None,
 ///         password: None,
 ///         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -342,9 +348,9 @@ pub enum CredentialsFrom {
 /// let client = client::Builder::new()
 ///     .credentials(Credentials {
 ///         client_id: "your_client_id".to_string(),
-///         client_secret: Some("your_client_secret".to_string()),
+///         client_secret: Some("your_client_secret".into()),
 ///         username: Some("user@example.com".to_string()),
-///         password: Some("your_password".to_string()),
+///         password: Some("your_password".into()),
 ///         instance_url: "https://your-instance.salesforce.com".to_string(),
 ///         tenant_id: "your_tenant_id".to_string(),
 ///     })
@@ -464,7 +470,8 @@ impl Client {
         let client_secret = credentials
             .client_secret
             .as_ref()
-            .ok_or(Error::MissingClientSecret)?;
+            .ok_or(Error::MissingClientSecret)?
+            .expose_secret();
 
         let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
@@ -472,7 +479,7 @@ impl Client {
             .post(&token_url)
             .form(&[
                 ("grant_type", "client_credentials"),
-                ("client_id", &credentials.client_id),
+                ("client_id", credentials.client_id.as_str()),
                 ("client_secret", client_secret),
             ])
             .send()
@@ -507,7 +514,8 @@ impl Client {
         let client_secret = credentials
             .client_secret
             .as_ref()
-            .ok_or(Error::MissingClientSecret)?;
+            .ok_or(Error::MissingClientSecret)?
+            .expose_secret();
         let username = credentials
             .username
             .as_ref()
@@ -515,7 +523,8 @@ impl Client {
         let password = credentials
             .password
             .as_ref()
-            .ok_or(Error::MissingPassword)?;
+            .ok_or(Error::MissingPassword)?
+            .expose_secret();
 
         let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
@@ -523,9 +532,9 @@ impl Client {
             .post(&token_url)
             .form(&[
                 ("grant_type", "password"),
-                ("client_id", &credentials.client_id),
+                ("client_id", credentials.client_id.as_str()),
                 ("client_secret", client_secret),
-                ("username", username),
+                ("username", username.as_str()),
                 ("password", password),
             ])
             .send()
@@ -643,7 +652,8 @@ impl Client {
         let client_secret = credentials
             .client_secret
             .as_ref()
-            .ok_or(Error::MissingClientSecret)?;
+            .ok_or(Error::MissingClientSecret)?
+            .expose_secret();
 
         let token_url = format!("{}{}", credentials.instance_url, DEFAULT_TOKEN_PATH);
 
@@ -654,7 +664,7 @@ impl Client {
             .post(&token_url)
             .form(&[
                 ("grant_type", "refresh_token"),
-                ("client_id", &credentials.client_id),
+                ("client_id", credentials.client_id.as_str()),
                 ("client_secret", client_secret),
                 ("refresh_token", refresh_token.secret()),
             ])
@@ -694,18 +704,21 @@ impl Client {
     /// This is a synchronous method that returns the current token state.
     /// Use [`access_token`](Self::access_token) for automatic refresh.
     ///
+    /// The token is redacted from `Debug` output; read it with
+    /// [`ExposeSecret::expose_secret`].
+    ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - Client is not connected ([`Error::NotConnected`])
     /// - Failed to acquire token state lock ([`Error::LockError`])
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
-    pub fn current_access_token(&self) -> Result<String, Error> {
+    pub fn current_access_token(&self) -> Result<SecretString, Error> {
         let token_state_arc = self.token_state.as_ref().ok_or(Error::NotConnected)?;
 
         let state = token_state_arc.read().map_err(|_| Error::LockError)?;
 
-        Ok(state.access_token().to_string())
+        Ok(SecretString::from(state.access_token()))
     }
 
     /// Forces a new token by reconnecting to Salesforce.
@@ -735,7 +748,7 @@ impl Client {
     /// let mut client = client::Builder::new()
     ///     .credentials(Credentials {
     ///         client_id: "your_client_id".to_string(),
-    ///         client_secret: Some("your_client_secret".to_string()),
+    ///         client_secret: Some("your_client_secret".into()),
     ///         username: None,
     ///         password: None,
     ///         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -791,6 +804,9 @@ impl Client {
     /// Note: This only handles token expiry. For INVALID_SESSION_ID errors
     /// (session revoked), use [`reconnect`](Self::reconnect) instead.
     ///
+    /// The token is redacted from `Debug` output; read it with
+    /// [`ExposeSecret::expose_secret`].
+    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -802,13 +818,14 @@ impl Client {
     ///
     /// ```no_run
     /// use salesforce_core::client::{self, Credentials};
+    /// use salesforce_core::secrecy::ExposeSecret;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = client::Builder::new()
     ///     .credentials(Credentials {
     ///         client_id: "your_client_id".to_string(),
-    ///         client_secret: Some("your_client_secret".to_string()),
+    ///         client_secret: Some("your_client_secret".into()),
     ///         username: None,
     ///         password: None,
     ///         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -820,11 +837,13 @@ impl Client {
     ///
     /// // Get access token - automatically refreshes if expired
     /// let token = client.access_token().await?;
+    /// let bearer = format!("Bearer {}", token.expose_secret());
+    /// # let _ = bearer;
     /// # Ok(())
     /// # }
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
-    pub async fn access_token(&self) -> Result<String, Error> {
+    pub async fn access_token(&self) -> Result<SecretString, Error> {
         let token_state_arc = self.token_state.as_ref().ok_or(Error::NotConnected)?;
 
         // Check if token needs refresh
@@ -850,7 +869,7 @@ impl Client {
         // Return access token
         let state = token_state_arc.read().map_err(|_| Error::LockError)?;
 
-        Ok(state.access_token().to_string())
+        Ok(SecretString::from(state.access_token()))
     }
 }
 
@@ -871,7 +890,7 @@ impl Client {
 /// let client = client::Builder::new()
 ///     .credentials(Credentials {
 ///         client_id: "your_client_id".to_string(),
-///         client_secret: Some("your_client_secret".to_string()),
+///         client_secret: Some("your_client_secret".into()),
 ///         username: None,
 ///         password: None,
 ///         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -895,9 +914,9 @@ impl Client {
 /// let client = client::Builder::new()
 ///     .credentials(Credentials {
 ///         client_id: "your_client_id".to_string(),
-///         client_secret: Some("your_client_secret".to_string()),
+///         client_secret: Some("your_client_secret".into()),
 ///         username: Some("user@example.com".to_string()),
-///         password: Some("your_password".to_string()),
+///         password: Some("your_password".into()),
 ///         instance_url: "https://your-instance.salesforce.com".to_string(),
 ///         tenant_id: "your_tenant_id".to_string(),
 ///     })
@@ -1032,6 +1051,21 @@ mod tests {
     }
 
     #[test]
+    fn test_credentials_debug_redacts_secrets() {
+        let credentials = Credentials {
+            client_id: "id".to_string(),
+            client_secret: Some("client-secret-value".into()),
+            username: Some("user@example.com".to_string()),
+            password: Some("password-value".into()),
+            instance_url: "https://localhost".to_string(),
+            tenant_id: "tenant".to_string(),
+        };
+        let debug = format!("{credentials:?}");
+        assert!(!debug.contains("client-secret-value"));
+        assert!(!debug.contains("password-value"));
+    }
+
+    #[test]
     fn test_build_with_credentials() {
         let mut path = env::temp_dir();
         path.push(format!("credentials_{}.json", std::process::id()));
@@ -1117,7 +1151,7 @@ mod tests {
     async fn test_connect_with_direct_credentials() {
         let creds = Credentials {
             client_id: "test_client_id".to_string(),
-            client_secret: Some("test_client_secret".to_string()),
+            client_secret: Some("test_client_secret".into()),
             username: None,
             password: None,
             instance_url: "https://test.salesforce.com".to_string(),
@@ -1152,9 +1186,9 @@ mod tests {
     async fn test_username_password_flow_missing_username() {
         let creds = Credentials {
             client_id: "test_client_id".to_string(),
-            client_secret: Some("test_secret".to_string()),
+            client_secret: Some("test_secret".into()),
             username: None,
-            password: Some("test_password".to_string()),
+            password: Some("test_password".into()),
             instance_url: "https://test.salesforce.com".to_string(),
             tenant_id: "test_tenant_id".to_string(),
         };
@@ -1171,7 +1205,7 @@ mod tests {
     async fn test_username_password_flow_missing_password() {
         let creds = Credentials {
             client_id: "test_client_id".to_string(),
-            client_secret: Some("test_secret".to_string()),
+            client_secret: Some("test_secret".into()),
             username: Some("test_user".to_string()),
             password: None,
             instance_url: "https://test.salesforce.com".to_string(),
@@ -1190,9 +1224,9 @@ mod tests {
     async fn test_username_password_flow_with_valid_fields() {
         let creds = Credentials {
             client_id: "test_client_id".to_string(),
-            client_secret: Some("test_secret".to_string()),
+            client_secret: Some("test_secret".into()),
             username: Some("test_user".to_string()),
-            password: Some("test_password".to_string()),
+            password: Some("test_password".into()),
             instance_url: "https://test.salesforce.com".to_string(),
             tenant_id: "test_tenant_id".to_string(),
         };
@@ -1212,7 +1246,7 @@ mod tests {
             client_id: "test_client_id".to_string(),
             client_secret: None,
             username: Some("test_user".to_string()),
-            password: Some("test_password".to_string()),
+            password: Some("test_password".into()),
             instance_url: "https://test.salesforce.com".to_string(),
             tenant_id: "test_tenant_id".to_string(),
         };
@@ -1257,7 +1291,7 @@ mod tests {
         let client = Builder::new()
             .credentials(Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -1275,7 +1309,7 @@ mod tests {
         let client = Builder::new()
             .credentials(Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -1299,7 +1333,7 @@ mod tests {
         let mut client = Builder::new()
             .credentials(Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -1335,7 +1369,7 @@ mod tests {
         let mut client = Builder::new()
             .credentials(Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),

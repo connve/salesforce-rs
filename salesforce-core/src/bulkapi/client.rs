@@ -22,7 +22,7 @@ use std::sync::Arc;
 /// let auth_client = client::Builder::new()
 ///     .credentials(Credentials {
 ///         client_id: "...".to_string(),
-///         client_secret: Some("...".to_string()),
+///         client_secret: Some("...".into()),
 ///         username: None,
 ///         password: None,
 ///         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -111,7 +111,7 @@ impl ClientBuilder {
     /// let auth_client = client::Builder::new()
     ///     .credentials(Credentials {
     ///         client_id: "...".to_string(),
-    ///         client_secret: Some("...".to_string()),
+    ///         client_secret: Some("...".into()),
     ///         username: None,
     ///         password: None,
     ///         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -161,7 +161,7 @@ impl ClientBuilder {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -205,7 +205,7 @@ impl ClientBuilder {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -249,7 +249,7 @@ impl ClientBuilder {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -292,7 +292,7 @@ impl ClientBuilder {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -363,7 +363,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -395,7 +395,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -453,7 +453,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_client_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -519,7 +519,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_client_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),

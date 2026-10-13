@@ -7,7 +7,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec_content = fs::read_to_string(&spec_path)?;
     let spec: openapiv3::OpenAPI = serde_yaml::from_str(&spec_content)?;
 
-    let mut generator = progenitor::Generator::default();
+    // The client carries the per-call headers of one request builder; the
+    // `pre` hook in `src/lib.rs` adds them to the request.
+    let mut settings = progenitor::GenerationSettings::default();
+    settings.with_inner_type(quote::quote! { reqwest::header::HeaderMap });
+
+    let mut generator = progenitor::Generator::new(&settings);
     let tokens = generator.generate_tokens(&spec)?;
     let content = tokens.to_string();
 

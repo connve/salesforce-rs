@@ -7,24 +7,36 @@ edition.workspace = true
 rust-version.workspace = true
 description = "Generated Salesforce REST API client (used by salesforce_core)"
 repository.workspace = true
-homepage.workspace = true
 
 [lib]
 name = "salesforce_core_restapi"
 path = "src/lib.rs"
 
+# Not `workspace = true`: the code is emitted by progenitor, so the workspace
+# lints would fail on output we don't control.
+[lints.rust]
+dead_code = "allow"
+unused_imports = "allow"
+
+[lints.clippy]
+all = "allow"
+
+[lints.rustdoc]
+broken_intra_doc_links = "allow"
+
 [dependencies]
-bytes = { workspace = true }
-futures-util = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
 url = { workspace = true }
 progenitor-client = { workspace = true }
 chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["net", "io-util"] }
 
 [build-dependencies]
 progenitor = { workspace = true }
 openapiv3 = { workspace = true }
 serde_yaml = { workspace = true }
+quote = { workspace = true }

@@ -1,7 +1,10 @@
 //! REST API client wrapper.
 
 use crate::client;
-use reqwest::header::{HeaderMap, HeaderName, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{
+    HeaderMap, HeaderName, ACCEPT, AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE, HOST,
+    TRANSFER_ENCODING,
+};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,10 +12,18 @@ use crate::{DEFAULT_API_VERSION, DEFAULT_CONNECT_TIMEOUT_SECS, DEFAULT_REQUEST_T
 
 /// Headers that callers must not set via `default_headers` or per-call overrides.
 ///
-/// `Authorization` is owned by the auth client and `Content-Type`/`Accept` are
-/// controlled by the generated API client per endpoint. Allowing overrides
-/// would silently break requests.
-const FORBIDDEN_HEADERS: &[HeaderName] = &[AUTHORIZATION, CONTENT_TYPE, ACCEPT];
+/// `Authorization` is owned by the auth client, `Content-Type`/`Accept` are
+/// controlled by the generated API client per endpoint, and the framing
+/// headers (`Content-Length`, `Transfer-Encoding`, `Host`) are set by the HTTP
+/// stack. Allowing overrides would silently break or misroute requests.
+const FORBIDDEN_HEADERS: &[HeaderName] = &[
+    AUTHORIZATION,
+    CONTENT_TYPE,
+    ACCEPT,
+    CONTENT_LENGTH,
+    TRANSFER_ENCODING,
+    HOST,
+];
 
 /// Returns the first reserved header name in `headers`, if any.
 pub(crate) fn forbidden_header(headers: &HeaderMap) -> Option<String> {
@@ -99,7 +110,7 @@ impl ClientBuilder {
     /// let auth_client = client::Builder::new()
     ///     .credentials(Credentials {
     ///         client_id: "...".to_string(),
-    ///         client_secret: Some("...".to_string()),
+    ///         client_secret: Some("...".into()),
     ///         username: None,
     ///         password: None,
     ///         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -166,8 +177,12 @@ impl ClientBuilder {
     /// `Sforce-Duplicate-Rule-Header`, `Sforce-Auto-Assign`, or
     /// `Sforce-Call-Options`.
     ///
+    /// A header set per call with `.header()` / `.headers()` on a request
+    /// builder replaces the default header of the same name for that call.
+    ///
     /// Headers managed by the SDK (`Authorization`, `Content-Type`, `Accept`)
-    /// are rejected at [`build`](Self::build) time.
+    /// or the HTTP stack (`Content-Length`, `Transfer-Encoding`, `Host`) are
+    /// rejected at [`build`](Self::build) time.
     ///
     /// # Example
     ///
@@ -181,7 +196,7 @@ impl ClientBuilder {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://localhost".to_string(),
@@ -275,8 +290,10 @@ impl Client {
     /// Gets an HTTP client with authentication and client-level default
     /// headers for API requests.
     ///
-    /// Returns a cached client when the token and headers haven't changed,
-    /// reusing TCP connections and TLS sessions for better performance.
+    /// Returns a cached client when the token hasn't changed, reusing TCP
+    /// connections and TLS sessions across requests. Per-call headers are
+    /// not part of it: the generated client adds them to each request, and
+    /// they replace a default header of the same name.
     pub(crate) async fn get_http_client(&self) -> Result<reqwest::Client, crate::http::Error> {
         self.http_cache
             .get(
@@ -286,36 +303,6 @@ impl Client {
                 &self.default_headers,
             )
             .await
-    }
-
-    /// Builds a fresh (uncached) HTTP client whose default headers are the
-    /// client-level headers merged with `per_call`.
-    ///
-    /// Used by request builders that attach per-call Salesforce headers (for
-    /// example `Sforce-Duplicate-Rule-Header`) without mutating the long-lived
-    /// cached client. Callers are responsible for validating `per_call`
-    /// against [`forbidden_header`] before invoking.
-    pub(crate) async fn get_http_client_with_extra(
-        &self,
-        per_call: &HeaderMap,
-    ) -> Result<reqwest::Client, crate::http::Error> {
-        let token = self
-            .auth_client
-            .access_token()
-            .await
-            .map_err(|source| crate::http::Error::Auth { source })?;
-
-        let mut merged = self.default_headers.clone();
-        for (name, value) in per_call.iter() {
-            merged.append(name.clone(), value.clone());
-        }
-
-        crate::http::build_http_client(
-            &token,
-            self.connect_timeout(),
-            self.request_timeout(),
-            &merged,
-        )
     }
 
     /// Access SObject CRUD operations.
@@ -361,6 +348,15 @@ mod tests {
         let mut h = HeaderMap::new();
         h.insert(ACCEPT, HeaderValue::from_static("application/xml"));
         assert_eq!(forbidden_header(&h).as_deref(), Some("accept"));
+    }
+
+    #[test]
+    fn test_forbidden_header_rejects_framing_headers() {
+        for name in [CONTENT_LENGTH, TRANSFER_ENCODING, HOST] {
+            let mut h = HeaderMap::new();
+            h.insert(name.clone(), HeaderValue::from_static("x"));
+            assert_eq!(forbidden_header(&h).as_deref(), Some(name.as_str()));
+        }
     }
 
     #[test]

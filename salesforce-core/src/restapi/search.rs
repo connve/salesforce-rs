@@ -2,7 +2,8 @@
 
 use super::Client;
 use crate::client;
-use salesforce_core_restapi::types::SearchResponse;
+use reqwest::header::HeaderMap;
+use salesforce_core_restapi::types::{ErrorResponse, SearchResponse};
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 
 /// Error type for search operations.
@@ -20,7 +21,7 @@ pub enum Error {
     #[error("Search API error: {source}")]
     SearchApi {
         #[source]
-        source: Box<GeneratedError<salesforce_core_restapi::types::ErrorResponse>>,
+        source: Box<GeneratedError<ErrorResponse>>,
     },
 
     /// Network-level communication failure.
@@ -65,7 +66,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
@@ -91,13 +92,10 @@ impl Client {
         let sosl_query = sosl_query.as_ref();
         let http_client = self.get_http_client().await.map_err(|e| match e {
             crate::http::Error::Auth { source } => Error::Auth { source },
-            crate::http::Error::InvalidHeader | crate::http::Error::Lock => Error::Auth {
-                source: client::Error::LockError,
-            },
             crate::http::Error::Build { source } => Error::Communication { source },
         })?;
         let base_url = self.base_url().map_err(|source| Error::Auth { source })?;
-        let client = GeneratedClient::new_with_client(&base_url, http_client);
+        let client = GeneratedClient::new_with_client(&base_url, http_client, HeaderMap::new());
 
         let response = client
             .search(sosl_query)

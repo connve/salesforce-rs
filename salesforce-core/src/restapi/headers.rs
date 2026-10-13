@@ -26,23 +26,30 @@ impl HeaderBag {
         }
     }
 
-    pub(crate) fn from_map(headers: HeaderMap) -> Self {
-        Self {
-            headers,
-            invalid: None,
+    /// Merges `incoming` with the semantics of
+    /// `reqwest::RequestBuilder::headers`: every name in `incoming` replaces
+    /// the values already set for it, other names are kept. An earlier invalid
+    /// header stays recorded.
+    pub(crate) fn merge(&mut self, incoming: HeaderMap) {
+        for name in incoming.keys() {
+            self.headers.remove(name);
+        }
+        for (name, value) in &incoming {
+            self.headers.append(name.clone(), value.clone());
         }
     }
 
     pub(crate) fn add<N, V>(&mut self, name: N, value: V)
     where
-        N: TryInto<HeaderName>,
+        N: TryInto<HeaderName> + AsRef<str>,
         V: TryInto<HeaderValue>,
     {
         if self.invalid.is_some() {
             return;
         }
+        let raw_name = name.as_ref().to_string();
         match name.try_into() {
-            Err(_) => self.invalid = Some("<invalid name>".to_string()),
+            Err(_) => self.invalid = Some(raw_name),
             Ok(name) => match value.try_into() {
                 Err(_) => self.invalid = Some(name.as_str().to_string()),
                 Ok(value) => {
@@ -70,16 +77,17 @@ macro_rules! impl_header_methods {
         /// Adds a single header to this request.
         pub fn header<N, V>(mut self, name: N, value: V) -> Self
         where
-            N: TryInto<::reqwest::header::HeaderName>,
+            N: TryInto<::reqwest::header::HeaderName> + AsRef<str>,
             V: TryInto<::reqwest::header::HeaderValue>,
         {
             self.headers.add(name, value);
             self
         }
 
-        /// Replaces all per-call headers with `headers`.
+        /// Adds `headers` to this request. Each name in `headers` replaces the
+        /// values already set for it; other headers are kept.
         pub fn headers(mut self, headers: ::reqwest::header::HeaderMap) -> Self {
-            self.headers = $crate::restapi::headers::HeaderBag::from_map(headers);
+            self.headers.merge(headers);
             self
         }
     };
@@ -102,15 +110,47 @@ mod tests {
     }
 
     #[test]
-    fn test_rejects_forbidden_in_replacement_map() {
+    fn test_rejects_forbidden_in_merged_map() {
         let mut headers = HeaderMap::new();
         headers.insert(
             reqwest::header::CONTENT_TYPE,
             HeaderValue::from_static("text/plain"),
         );
+        let mut bag = HeaderBag::new();
+        bag.merge(headers);
         assert!(matches!(
-            HeaderBag::from_map(headers).finish(),
+            bag.finish(),
             Err(InvalidHeader { ref name }) if name == "content-type"
+        ));
+    }
+
+    #[test]
+    fn test_merge_replaces_same_name_and_keeps_others() {
+        let mut bag = HeaderBag::new();
+        bag.add("Sforce-Auto-Assign", "TRUE");
+        bag.add("Sforce-Duplicate-Rule-Header", "allowSave=true");
+
+        let mut incoming = HeaderMap::new();
+        incoming.insert("sforce-auto-assign", HeaderValue::from_static("FALSE"));
+        bag.merge(incoming);
+
+        let map = bag.finish().expect("valid headers");
+        let auto_assign: Vec<_> = map.get_all("sforce-auto-assign").iter().collect();
+        assert_eq!(auto_assign, [HeaderValue::from_static("FALSE")]);
+        assert_eq!(
+            map.get("sforce-duplicate-rule-header"),
+            Some(&HeaderValue::from_static("allowSave=true"))
+        );
+    }
+
+    #[test]
+    fn test_merge_keeps_an_earlier_invalid_header() {
+        let mut bag = HeaderBag::new();
+        bag.add("Sforce-Auto-Assign", "bad\nvalue");
+        bag.merge(HeaderMap::new());
+        assert!(matches!(
+            bag.finish(),
+            Err(InvalidHeader { ref name }) if name == "sforce-auto-assign"
         ));
     }
 
@@ -125,13 +165,25 @@ mod tests {
     }
 
     #[test]
-    fn test_rejects_invalid_name() {
+    fn test_rejects_invalid_name_and_reports_it() {
         let mut bag = HeaderBag::new();
         bag.add("bad header", "x");
         assert!(matches!(
             bag.finish(),
-            Err(InvalidHeader { ref name }) if name == "<invalid name>"
+            Err(InvalidHeader { ref name }) if name == "bad header"
         ));
+    }
+
+    #[test]
+    fn test_rejects_framing_headers() {
+        for reserved in ["Content-Length", "Transfer-Encoding", "Host"] {
+            let mut bag = HeaderBag::new();
+            bag.add(reserved, "1");
+            assert!(
+                matches!(bag.finish(), Err(InvalidHeader { .. })),
+                "{reserved} should be reserved"
+            );
+        }
     }
 
     #[test]

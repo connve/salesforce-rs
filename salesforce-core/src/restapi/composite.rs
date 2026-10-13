@@ -7,12 +7,13 @@
 
 use super::headers::{impl_header_methods, HeaderBag, InvalidHeader};
 use super::Client;
+use crate::http::{check_path_segments, InvalidPathSegment};
 use salesforce_core_restapi::types::{
     CompositeCollectionCreateRequest, CompositeCollectionCreateResponse,
     CompositeCollectionDeleteResponse, CompositeCollectionRetrieveRequest,
     CompositeCollectionUpdateRequest, CompositeCollectionUpdateResponse,
     CompositeCollectionUpsertRequest, CompositeCollectionUpsertResponse, CompositeTreeRequest,
-    CompositeTreeResponse,
+    CompositeTreeResponse, ErrorResponse,
 };
 use salesforce_core_restapi::{Client as GeneratedClient, Error as GeneratedError};
 use serde_json::Value;
@@ -34,7 +35,7 @@ pub enum Error {
     CompositeApi {
         /// The underlying API error.
         #[source]
-        source: Box<GeneratedError<salesforce_core_restapi::types::ErrorResponse>>,
+        source: Box<GeneratedError<ErrorResponse>>,
     },
 
     /// Error serializing request data.
@@ -48,47 +49,71 @@ pub enum Error {
     /// Error building HTTP client.
     #[error("Failed to build HTTP client: {source}")]
     HttpClient {
-        /// The underlying HTTP client error.
+        /// The underlying reqwest error.
         #[source]
-        source: crate::http::Error,
+        source: reqwest::Error,
     },
 
-    /// A request header is either reserved by the SDK (`Authorization`,
-    /// `Content-Type`, `Accept`) or could not be converted into a valid
-    /// `HeaderName` / `HeaderValue`.
+    /// A request header is either reserved (`Authorization`, `Content-Type`,
+    /// `Accept`, `Content-Length`, `Transfer-Encoding`, `Host`) or could not be
+    /// converted into a valid `HeaderName` / `HeaderValue`.
     #[error("Invalid request header `{name}`")]
     InvalidHeader {
         /// The header name that was rejected.
         name: String,
+    },
+
+    /// An SObject type or external ID field used in the request path is
+    /// empty, `.`, `..`, or contains control characters. Caught before the
+    /// request is sent.
+    #[error("Invalid path segment `{segment}`")]
+    InvalidPathSegment {
+        /// The rejected value.
+        segment: String,
     },
 }
 
 impl Error {
     /// Returns `true` if the error is transient and the operation could
     /// succeed if retried.
+    ///
+    /// This only says the failure may be transient. Salesforce can have
+    /// created the records before a timeout or 5xx reached you, so retrying
+    /// `create_records` or `create_record_tree` can create duplicates. Where
+    /// a duplicate is not acceptable, use `upsert_records` with an external ID.
     pub fn is_retryable(&self) -> bool {
         match self {
             Error::Auth { source } => source.is_retryable(),
             Error::CompositeApi { source } => source.is_retryable(),
-            Error::HttpClient { source } => source.is_retryable(),
-            Error::Serde { .. } | Error::InvalidHeader { .. } => false,
+            Error::HttpClient { source } => source.is_timeout() || source.is_connect(),
+            Error::Serde { .. }
+            | Error::InvalidHeader { .. }
+            | Error::InvalidPathSegment { .. } => false,
         }
     }
 }
 
-async fn http_client_with(client: &Client, bag: HeaderBag) -> Result<reqwest::Client, Error> {
-    let extra = bag
-        .finish()
-        .map_err(|InvalidHeader { name }| Error::InvalidHeader { name })?;
-    client
-        .get_http_client_with_extra(&extra)
-        .await
-        .map_err(|source| Error::HttpClient { source })
+fn require_path_segments(segments: &[&str]) -> Result<(), Error> {
+    check_path_segments(segments)
+        .map_err(|InvalidPathSegment { segment }| Error::InvalidPathSegment { segment })
 }
 
-fn generated(client: &Client, http_client: reqwest::Client) -> Result<GeneratedClient, Error> {
+/// The generated client for one request: the shared, cached HTTP client plus
+/// the request's per-call headers.
+async fn generated(client: &Client, headers: HeaderBag) -> Result<GeneratedClient, Error> {
+    let headers = headers
+        .finish()
+        .map_err(|InvalidHeader { name }| Error::InvalidHeader { name })?;
+    let http_client = client.get_http_client().await.map_err(|e| match e {
+        crate::http::Error::Auth { source } => Error::Auth { source },
+        crate::http::Error::Build { source } => Error::HttpClient { source },
+    })?;
     let base_url = client.base_url().map_err(|source| Error::Auth { source })?;
-    Ok(GeneratedClient::new_with_client(&base_url, http_client))
+    Ok(GeneratedClient::new_with_client(
+        &base_url,
+        http_client,
+        headers,
+    ))
 }
 
 /// Builder for [`Client::create_records`].
@@ -105,8 +130,7 @@ impl<'a> CreateRecords<'a> {
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<CompositeCollectionCreateResponse, Error> {
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        let gen = generated(self.client, self.headers).await?;
         let response =
             gen.create_records(self.request)
                 .await
@@ -132,8 +156,8 @@ impl<'a> GetRecords<'a> {
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<Vec<serde_json::Map<String, Value>>, Error> {
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        require_path_segments(&[&self.sobject_type])?;
+        let gen = generated(self.client, self.headers).await?;
         let response = gen
             .get_records(&self.sobject_type, self.request)
             .await
@@ -158,8 +182,7 @@ impl<'a> UpdateRecords<'a> {
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<CompositeCollectionUpdateResponse, Error> {
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        let gen = generated(self.client, self.headers).await?;
         let response =
             gen.update_records(self.request)
                 .await
@@ -186,8 +209,8 @@ impl<'a> UpsertRecords<'a> {
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<CompositeCollectionUpsertResponse, Error> {
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        require_path_segments(&[&self.sobject_type, &self.external_id_field])?;
+        let gen = generated(self.client, self.headers).await?;
         let response = gen
             .upsert_records(&self.sobject_type, &self.external_id_field, self.request)
             .await
@@ -220,8 +243,7 @@ impl<'a> DeleteRecords<'a> {
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<CompositeCollectionDeleteResponse, Error> {
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        let gen = generated(self.client, self.headers).await?;
         let response = gen
             .delete_records(self.all_or_none, &self.ids)
             .await
@@ -247,8 +269,8 @@ impl<'a> CreateRecordTree<'a> {
     /// Dispatches the request.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn send(self) -> Result<CompositeTreeResponse, Error> {
-        let http_client = http_client_with(self.client, self.headers).await?;
-        let gen = generated(self.client, http_client)?;
+        require_path_segments(&[&self.sobject_type])?;
+        let gen = generated(self.client, self.headers).await?;
         let response = gen
             .create_record_tree(&self.sobject_type, self.request)
             .await
@@ -277,7 +299,7 @@ impl Client {
     /// # let auth_client = client::Builder::new()
     /// #     .credentials(Credentials {
     /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".to_string()),
+    /// #         client_secret: Some("...".into()),
     /// #         username: None,
     /// #         password: None,
     /// #         instance_url: "https://localhost".to_string(),

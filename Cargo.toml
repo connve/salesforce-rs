@@ -9,16 +9,13 @@ members = [
 ]
 
 [workspace.package]
-version = "0.19.0"
+version = "0.20.0"
 authors = ["CONNVE"]
 license = "MPL-2.0"
 edition = "2021"
 rust-version = "1.88"
-description = "Unofficial Rust SDK for Salesforce APIs"
 repository = "https://github.com/connve/salesforce-rs"
-homepage = "https://github.com/connve/salesforce-rs"
 documentation = "https://docs.rs/salesforce_core"
-readme = "README.md"
 keywords = ["salesforce", "sdk", "api", "oauth2", "grpc"]
 categories = ["api-bindings", "asynchronous"]
 publish = true
@@ -32,10 +29,10 @@ allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
 
 [workspace.dependencies]
-salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "0.19.0" }
-salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "0.19.0" }
-salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "0.19.0" }
-salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "0.19.0" }
+salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "0.20.0" }
+salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "0.20.0" }
+salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "0.20.0" }
+salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "0.20.0" }
 tokio = { version = "1.48", default-features = false, features = [
     "macros",
     "rt-multi-thread",
@@ -45,14 +42,12 @@ tokio = { version = "1.48", default-features = false, features = [
 tokio-stream = { version = "0.1", default-features = false, features = [
     "time",
 ] }
-tokio-util = { version = "0.7", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 tonic = { version = "0.14", default-features = false, features = [
     "transport",
     "codegen",
 ] }
 prost = { version = "0.14", default-features = false, features = ["std"] }
-prost-types = { version = "0.14", default-features = false, features = ["std"] }
 tonic-build = { version = "0.14", default-features = false }
 tonic-prost-build = { version = "0.14", default-features = false }
 prost-build = { version = "0.14", default-features = false }
@@ -66,6 +61,7 @@ reqwest = { version = "0.13", default-features = false, features = [
     "rustls",
 ] }
 thiserror = { version = "2.0", default-features = false, features = ["std"] }
+secrecy = { version = "0.10", default-features = false, features = ["serde"] }
 url = { version = "2.5", default-features = false }
 bytes = { version = "1.11", default-features = false, features = ["std"] }
 tracing = { version = "0.1", default-features = false, features = ["std"] }
@@ -75,6 +71,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 progenitor = "0.13"
 progenitor-client = "0.13"
+quote = "1.0"
 openapiv3 = { version = "2.2", default-features = false }
 serde_yaml = { version = "0.9", default-features = false }
 chrono = { version = "0.4", default-features = false, features = [

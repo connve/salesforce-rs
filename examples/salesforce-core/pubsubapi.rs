@@ -21,8 +21,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 4: Using automatic token refresh
     // The client automatically refreshes tokens that expire within 5 minutes.
     // This ensures you always have a valid token for API calls.
+    // The token is a `SecretString`; its `Debug` output is redacted.
     let fresh_token = client.access_token().await?;
-    info!("Got fresh access token: {}", &fresh_token[..20]); // Log first 20 chars
+    info!("Got fresh access token: {fresh_token:?}");
 
     // If you encounter INVALID_SESSION_ID errors from Salesforce API calls,
     // call reconnect() to force a fresh OAuth2 authentication and retry once.

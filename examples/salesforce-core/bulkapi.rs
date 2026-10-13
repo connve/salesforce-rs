@@ -79,7 +79,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     info!("Retrieving query results");
-    let mut results = query_client.get_results(&job.id, Some(1000), None).await?;
+    let mut results = query_client
+        .get_results(&job.id, std::num::NonZeroU64::new(1000), None)
+        .await?;
     while let Some(chunk) = results.next().await {
         let _chunk = chunk?;
     }

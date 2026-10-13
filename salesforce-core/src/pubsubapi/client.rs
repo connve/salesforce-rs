@@ -1,5 +1,6 @@
 use crate::client;
 use salesforce_core_pubsubapi::eventbus::v1::pub_sub_client::PubSubClient;
+use secrecy::ExposeSecret;
 use tokio_stream::StreamExt;
 
 /// Errors that can occur during Pub/Sub operations.
@@ -141,9 +142,12 @@ impl Client {
             .current_access_token()
             .map_err(|_| Error::MissingTokenResponse)?;
 
-        let auth_header: tonic::metadata::AsciiMetadataValue = token
+        let mut auth_header: tonic::metadata::AsciiMetadataValue = token
+            .expose_secret()
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
+        // Keeps the token out of `Debug` output of the request metadata.
+        auth_header.set_sensitive(true);
 
         let instance_url: tonic::metadata::AsciiMetadataValue = client
             .instance_url
@@ -229,9 +233,12 @@ impl Client {
             .current_access_token()
             .map_err(|_| Error::MissingTokenResponse)?;
 
-        let auth_header: tonic::metadata::AsciiMetadataValue = token
+        let mut auth_header: tonic::metadata::AsciiMetadataValue = token
+            .expose_secret()
             .parse()
             .map_err(|e| Error::InvalidMetadataValue { source: e })?;
+        // Keeps the token out of `Debug` output of the request metadata.
+        auth_header.set_sensitive(true);
 
         let instance_url: tonic::metadata::AsciiMetadataValue = self
             .client
@@ -504,7 +511,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -539,7 +546,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -575,7 +582,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -610,7 +617,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -674,7 +681,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "client123".to_string(),
-                client_secret: Some("secret123".to_string()),
+                client_secret: Some("secret123".into()),
                 username: None,
                 password: None,
                 instance_url: "https://login.salesforce.com".to_string(),
@@ -712,7 +719,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test".to_string(),
-                client_secret: Some("secret".to_string()),
+                client_secret: Some("secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -746,7 +753,7 @@ mod tests {
         let client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test".to_string(),
-                client_secret: Some("secret".to_string()),
+                client_secret: Some("secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -772,7 +779,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -813,7 +820,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -855,7 +862,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -896,7 +903,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -931,7 +938,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".to_string()),
+                client_secret: Some("test_secret".into()),
                 username: None,
                 password: None,
                 instance_url: "https://test.salesforce.com".to_string(),
@@ -973,7 +980,7 @@ mod tests {
         let mut client = client::Builder::new()
             .credentials(client::Credentials {
                 client_id: "client123".to_string(),
-                client_secret: Some("secret123".to_string()),
+                client_secret: Some("secret123".into()),
                 username: None,
                 password: None,
                 instance_url: "https://login.salesforce.com".to_string(),
