@@ -29,12 +29,14 @@
 //! ```
 //!
 //! See module-level docs for per-API examples: [`restapi`], [`bulkapi`],
-//! [`toolingapi`], [`pubsubapi`], [`soapapi`].
+//! [`toolingapi`], [`pubsubapi`], [`soapapi`]. Write values into SOQL
+//! queries with [`soql`].
 //!
 //! # Cargo features
 //!
 //! Each API surface is gated behind a feature so applications only pay the
-//! compile-time cost of what they use. All four are enabled by default.
+//! compile-time cost of what they use. All except `trace` are enabled by
+//! default.
 //!
 //! - `restapi` — SObject CRUD, SOQL query, search, composite collections (REST API)
 //! - `bulkapi` — Bulk API 2.0 query and ingest jobs
@@ -46,7 +48,7 @@
 //! For a slim build, disable defaults and opt in:
 //!
 //! ```toml
-//! salesforce_core = { version = "0.19", default-features = false, features = ["restapi"] }
+//! salesforce_core = { version = "0.23", default-features = false, features = ["restapi"] }
 //! ```
 
 /// Re-export of [`chrono`], which appears in this crate's public API.
@@ -110,6 +112,9 @@ pub const DEFAULT_POOL_MAX_IDLE_PER_HOST: usize = 10;
 
 /// OAuth2 client authentication and connection management.
 pub mod client;
+
+/// Helpers for building SOQL queries.
+pub mod soql;
 
 /// Salesforce Pub/Sub API for real-time event streaming.
 #[cfg(feature = "pubsubapi")]

@@ -196,6 +196,8 @@ impl Client {
     /// Batch size defaults to 2,000 records and can be lowered with the
     /// `Sforce-Query-Options: batchSize=<n>` header.
     ///
+    /// Quote values placed in the query with [`crate::soql::quote`].
+    ///
     /// # Example
     ///
     /// ```no_run

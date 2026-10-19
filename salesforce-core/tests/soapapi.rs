@@ -10,9 +10,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_merge_accounts() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let rest_client = RestClientBuilder::new(auth.clone()).build()?;
     let soap_client = SoapClientBuilder::new(auth).build()?;

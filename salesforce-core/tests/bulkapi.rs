@@ -7,9 +7,8 @@ use salesforce_core::bulkapi::{ClientBuilder, CreateQueryJobRequest, QueryOperat
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_bulk_query_job_lifecycle() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
     let query_client = client.query();
@@ -35,9 +34,8 @@ async fn test_bulk_query_job_lifecycle() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_bulk_query_get_all_jobs() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
     let query_client = client.query();

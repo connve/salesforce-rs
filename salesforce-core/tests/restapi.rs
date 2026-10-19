@@ -2,15 +2,16 @@
 
 mod common;
 
+use salesforce_core::chrono::{NaiveDate, Utc};
 use salesforce_core::restapi::{ClientBuilder, QueryError};
+use salesforce_core::soql;
 use serde_json::json;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_sobject_crud_cycle() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -66,9 +67,8 @@ async fn test_sobject_crud_cycle() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_describe_account() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -85,9 +85,8 @@ async fn test_describe_account() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_basic_info_account() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -99,9 +98,8 @@ async fn test_basic_info_account() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_create_invalid_sobject_type() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -115,9 +113,8 @@ async fn test_create_invalid_sobject_type() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_search_sosl() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -140,9 +137,8 @@ async fn test_search_sosl() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_get_deleted_records() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -170,9 +166,8 @@ async fn test_get_deleted_records() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_query_and_query_all() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -203,9 +198,8 @@ async fn test_query_and_query_all() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_query_more_follows_next_records_url() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -230,9 +224,33 @@ async fn test_query_more_follows_next_records_url() -> Result {
 }
 
 #[tokio::test]
-async fn test_query_malformed_soql() -> Result {
-    skip_if_no_credentials!();
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
+async fn test_query_accepts_quoted_escape_sequences() -> Result {
+    let auth = common::auth_client().await?;
+    let client = ClientBuilder::new(auth).build()?;
 
+    // Every character the `soql` helpers escape, in each literal they write.
+    // Salesforce rejects an unknown escape or a malformed literal with
+    // MALFORMED_QUERY, so success means each one is valid.
+    let name = "it's \"quoted\" \\ \n \r \t \u{8} \u{c} 50%_off";
+    let soql = format!(
+        "SELECT Id FROM Account WHERE Name = {} AND Name LIKE {} AND Name IN {} \
+         AND CreatedDate < {} AND (LastActivityDate = null OR LastActivityDate > {})",
+        soql::quote(name),
+        soql::like_contains(name),
+        soql::quote_list([name, "Acme"]).ok_or("empty list")?,
+        soql::datetime(Utc::now()),
+        soql::date(NaiveDate::from_ymd_opt(1970, 1, 1).ok_or("invalid date")?),
+    );
+    let page = client.query(soql).send().await?;
+    assert_eq!(page.total_size, 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
+async fn test_query_malformed_soql() -> Result {
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 

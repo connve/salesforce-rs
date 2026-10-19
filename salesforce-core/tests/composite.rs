@@ -35,9 +35,8 @@ async fn cleanup(client: &salesforce_core::restapi::Client, ids: &[String]) -> R
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_composite_create_and_delete() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -75,9 +74,8 @@ async fn test_composite_create_and_delete() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_composite_update() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -133,9 +131,8 @@ async fn test_composite_update() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_composite_retrieve() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -171,9 +168,8 @@ async fn test_composite_retrieve() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_composite_tree_create() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 

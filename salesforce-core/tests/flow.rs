@@ -8,9 +8,8 @@ use serde_json::json;
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_invoke_flow_invalid_name() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -23,9 +22,8 @@ async fn test_invoke_flow_invalid_name() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_invoke_flow_batch_invalid_name() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
@@ -42,9 +40,8 @@ async fn test_invoke_flow_batch_invalid_name() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_invoke_flow_rejects_non_object_input() -> Result {
-    skip_if_no_credentials!();
-
     let auth = common::auth_client().await?;
     let client = ClientBuilder::new(auth).build()?;
 
