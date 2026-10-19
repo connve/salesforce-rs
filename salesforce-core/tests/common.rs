@@ -1,7 +1,7 @@
-//! Shared test utilities for integration tests.
+//! Helpers for live tests against the Salesforce org whose credentials JSON
+//! file is named by `SFDC_CREDENTIALS`.
 //!
-//! Provides authentication helpers and a skip macro for tests that require
-//! Salesforce credentials via a JSON file path in `SFDC_CREDENTIALS`.
+//! Live tests are `#[ignore]`d; run them with `cargo test -- --ignored`.
 
 use salesforce_core::client;
 use std::env;
@@ -9,30 +9,10 @@ use std::env;
 /// Environment variable pointing to the credentials JSON file.
 const CREDENTIALS_ENV: &str = "SFDC_CREDENTIALS";
 
-/// Returns true if the credentials environment variable is set.
-pub fn credentials_available() -> bool {
-    env::var(CREDENTIALS_ENV).is_ok()
-}
-
-/// Skips the current test if Salesforce credentials are not configured.
-///
-/// Must be called at the start of every integration test. The test function
-/// must return `Result<(), Box<dyn std::error::Error>>`.
-#[macro_export]
-macro_rules! skip_if_no_credentials {
-    () => {
-        if !common::credentials_available() {
-            eprintln!(
-                "Skipping integration test: set SFDC_CREDENTIALS to a JSON file path to run."
-            );
-            return Ok(());
-        }
-    };
-}
-
-/// Reads the credentials JSON file named by `SFDC_CREDENTIALS`.
+/// Reads the credentials JSON file named by `SFDC_CREDENTIALS`. Fails when
+/// the variable is unset, so an ignored test run without it can't pass.
 pub fn credentials() -> Result<client::Credentials, Box<dyn std::error::Error>> {
-    let path = env::var(CREDENTIALS_ENV)?;
+    let path = env::var(CREDENTIALS_ENV).map_err(|error| format!("{CREDENTIALS_ENV}: {error}"))?;
     Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
 }
 

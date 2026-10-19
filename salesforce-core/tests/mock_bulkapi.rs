@@ -1,7 +1,7 @@
 //! Offline tests for Bulk API 2.0 query results.
 //!
 //! Runs against a local `wiremock` server and needs no Salesforce org, so it
-//! doesn't skip when `SFDC_CREDENTIALS` is unset.
+//! isn't `#[ignore]`d.
 
 use futures_util::StreamExt;
 use salesforce_core::bulkapi::query::QueryClient;

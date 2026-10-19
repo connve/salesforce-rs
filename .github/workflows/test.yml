@@ -53,9 +53,10 @@ jobs:
     - name: Run integration tests
       env:
         SFDC_CREDENTIALS: ${{ runner.temp }}/sfdc_credentials.json
-      # `--test '*'` picks up every file under `salesforce-core/tests/`, so a
-      # new integration test file runs here without editing this workflow.
-      run: cargo test --verbose -p salesforce_core --test '*'
+      # The live tests are `#[ignore]`d; `--ignored` runs only them, since the
+      # mocks already ran in `test-rust-latest`. `--test '*'` picks up every
+      # file under `salesforce-core/tests/` without editing this workflow.
+      run: cargo test --verbose --all-features -p salesforce_core --test '*' -- --ignored
 
   test-rust-nightly:
     runs-on: ubuntu-latest

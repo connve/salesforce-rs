@@ -63,7 +63,7 @@ The SDK takes credential values through builder setters or a deserializable
 `Credentials` struct. It doesn't read files; where credentials come from is
 up to the application.
 
-Tests and examples load credentials from a JSON file pointed to by a single env var, not from individual `*_USERNAME` / `*_SECRET` env vars. This avoids leaking secrets into shell history and keeps test setup to one line. Integration tests must skip silently when the env var is unset.
+Tests and examples load credentials from a JSON file pointed to by a single env var, not from individual `*_USERNAME` / `*_SECRET` env vars. This avoids leaking secrets into shell history and keeps test setup to one line. Integration tests are `#[ignore]`d and fail when the env var is unset.
 
 ### 6. Retry policy: `is_retryable()` on every public Error
 Every public `Error` enum exposes an `is_retryable(&self) -> bool` method so consumers can drive their own retry loops without pattern-matching internal variants. Transport errors and 5xx responses are retryable; auth failures and 4xx are not. Document the policy per variant.
@@ -187,9 +187,9 @@ Three tiers, picked by what the code under test touches:
   `wiremock` server. Use them for request and response handling, such as
   headers and pagination. They always run.
 - **Integration tests**: `salesforce-core/tests/<api>.rs`, one file per API.
-  These hit a real Salesforce org, so they open with `skip_if_no_credentials!()`
-  and exit quietly when `SFDC_CREDENTIALS` is unset — `cargo test` has to pass
-  on a machine with no org configured.
+  These hit a real Salesforce org, so each is
+  `#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]`. `cargo test`
+  passes with no org configured; `-- --ignored` runs them.
 
 Credentials come from a JSON file pointed at by `SFDC_CREDENTIALS`, loaded by
 the shared helpers in `salesforce-core/tests/common.rs`. Never read individual
@@ -204,7 +204,7 @@ Run them with:
 
 ```bash
 cargo test --workspace
-SFDC_CREDENTIALS=$PWD/credentials.json cargo test -p salesforce_core --test '*'
+SFDC_CREDENTIALS=$PWD/credentials.json cargo test -p salesforce_core --test '*' -- --ignored
 SFDC_CREDENTIALS=$PWD/credentials.json cargo run --example restapi
 ```
 
@@ -220,7 +220,7 @@ The credentials file:
 ```
 
 **Reference implementations:**
-- Credential loading and the skip macro: `salesforce-core/tests/common.rs`
+- Credential loading: `salesforce-core/tests/common.rs`
 - Mock tests: `salesforce-core/tests/mock_bulkapi.rs`
 - REST integration tests, including the asynchronous-propagation case:
   `salesforce-core/tests/restapi.rs`

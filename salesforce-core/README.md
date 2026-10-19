@@ -17,7 +17,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.22"
+salesforce_core = "0.23"
 ```
 
 ```rust
@@ -63,6 +63,31 @@ let auth = client::Client::builder().credentials(credentials).build()?;
 `tenant_id` (the org ID) is only needed for the Pub/Sub API. `username` and
 `password` are only needed for the username-password flow.
 
+## SOQL values
+
+The REST and Bulk APIs have no bind variables, so values go into the query
+as literals. Write them with the `soql` helpers, so a value can't change the
+query:
+
+```rust
+use salesforce_core::soql;
+
+let query = format!(
+    "SELECT Id FROM Contact WHERE LastName = {} AND Email LIKE {} AND Id IN {} AND CreatedDate > {}",
+    soql::quote(last_name),
+    soql::like_ends_with("@example.com"),
+    soql::quote_list(&ids).ok_or("no ids")?,
+    soql::datetime(since),
+);
+```
+
+| Helper | Writes |
+| --- | --- |
+| `quote` | String literal: `'O\'Brien'` |
+| `like_contains`, `like_starts_with`, `like_ends_with` | `LIKE` pattern with `%` and `_` in the value matched literally |
+| `quote_list` | `IN` list: `('a', 'b')`; `None` when empty |
+| `date`, `datetime` | `2026-10-19`, `2026-10-19T12:00:00Z` |
+
 ## Pagination
 
 SOQL queries return one batch at a time. Pass `next_records_url` to
@@ -106,7 +131,7 @@ All features except `trace` are enabled by default. For a slim build, turn
 off the defaults and pick what you need:
 
 ```toml
-salesforce_core = { version = "0.22", default-features = false, features = ["restapi"] }
+salesforce_core = { version = "0.23", default-features = false, features = ["restapi"] }
 ```
 
 `chrono` is re-exported as `salesforce_core::chrono`. Use it for the

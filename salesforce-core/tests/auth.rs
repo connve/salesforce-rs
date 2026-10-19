@@ -8,9 +8,8 @@ use salesforce_core::secrecy::ExposeSecret;
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_client_credentials_connect() -> Result {
-    skip_if_no_credentials!();
-
     let client = common::auth_client().await?;
 
     assert!(client.instance_url.is_some());
@@ -23,9 +22,8 @@ async fn test_client_credentials_connect() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_access_token_is_cached() -> Result {
-    skip_if_no_credentials!();
-
     let client = common::auth_client().await?;
 
     let token1 = client.access_token().await?;
@@ -36,9 +34,8 @@ async fn test_access_token_is_cached() -> Result {
 }
 
 #[tokio::test]
+#[ignore = "needs a Salesforce org in SFDC_CREDENTIALS"]
 async fn test_reconnect() -> Result {
-    skip_if_no_credentials!();
-
     let mut client = common::auth_client().await?;
     let token_before = client.access_token().await?;
 

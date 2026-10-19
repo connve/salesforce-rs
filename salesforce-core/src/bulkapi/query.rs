@@ -127,6 +127,8 @@ impl QueryClient {
 
     /// Creates a new bulk query job.
     ///
+    /// Quote values placed in the query with [`crate::soql::quote`].
+    ///
     /// # Arguments
     ///
     /// * `request` - The query job creation request containing the SOQL query and options

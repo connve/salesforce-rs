@@ -4,6 +4,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.23.0]
+
+### Added
+- `soql` module for writing values into SOQL queries, sent through REST and Bulk API alike:
+  - `quote(value)` writes a string literal. It escapes `\`, `'`, `"`, newline, carriage return, tab, backspace, and form feed.
+  - `like_contains`, `like_starts_with`, and `like_ends_with` write a `LIKE` pattern in which `%` and `_` from the value are matched literally.
+  - `quote_list(values)` writes an `IN` list, or `None` for no values.
+  - `date` and `datetime` write date and dateTime literals.
+
+### Changed
+- Integration tests are `#[ignore]`d instead of skipped when `SFDC_CREDENTIALS` is unset. Run them with `cargo test -- --ignored`.
+
 ## [0.22.0]
 
 ### Changed
