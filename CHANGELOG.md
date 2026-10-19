@@ -4,6 +4,11 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.22.0]
+
+### Changed
+- The README shows the same badges on GitHub and crates.io.
+
 ## [0.21.0]
 
 ### Changed

@@ -1,7 +1,11 @@
 # salesforce_core
 
+[![Test Suite](https://github.com/connve/salesforce-rs/actions/workflows/test.yml/badge.svg)](https://github.com/connve/salesforce-rs/actions/workflows/test.yml)
+[![Security Audit](https://github.com/connve/salesforce-rs/actions/workflows/security.yml/badge.svg)](https://github.com/connve/salesforce-rs/actions/workflows/security.yml)
+[![Release](https://img.shields.io/github/v/release/connve/salesforce-rs)](https://github.com/connve/salesforce-rs/releases)
 [![Crates.io](https://img.shields.io/crates/v/salesforce_core.svg)](https://crates.io/crates/salesforce_core)
 [![Docs.rs](https://docs.rs/salesforce_core/badge.svg)](https://docs.rs/salesforce_core)
+[![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 
 Unofficial Rust SDK for the **Salesforce Core** (Sales Cloud, Service Cloud, Platform) APIs: REST, Bulk 2.0, Pub/Sub (gRPC), Tooling, and SOAP.
 
@@ -13,7 +17,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.21"
+salesforce_core = "0.22"
 ```
 
 ```rust
@@ -102,7 +106,7 @@ All features except `trace` are enabled by default. For a slim build, turn
 off the defaults and pick what you need:
 
 ```toml
-salesforce_core = { version = "0.21", default-features = false, features = ["restapi"] }
+salesforce_core = { version = "0.22", default-features = false, features = ["restapi"] }
 ```
 
 `chrono` is re-exported as `salesforce_core::chrono`. Use it for the
