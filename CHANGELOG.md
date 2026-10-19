@@ -4,6 +4,30 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.21.0]
+
+### Changed
+- **Breaking:** `bulkapi::QueryClient::get_results` returns `QueryResults` (`body`, `locator`, `number_of_records`) instead of a `ByteStream`.
+  Before: `let stream = query.get_results(id, None, None).await?;`
+  After: `let stream = query.get_results(id, None, None).await?.body;`
+- **Breaking:** `client::Builder::credentials_path` is removed. The SDK no longer reads files; load the JSON in your application and pass it to `.credentials()`.
+  Before: `.credentials_path(path)`
+  After: `.credentials(serde_json::from_str(&std::fs::read_to_string(path)?)?)`
+- **Breaking:** `Credentials::tenant_id` is `Option<String>`. Only the Pub/Sub API needs it.
+- **Breaking:** `client::Builder::build` checks the fields the auth flow needs and that `instance_url` is an absolute URL. Missing fields fail at `build()` instead of `connect()`.
+- **Breaking:** Removed `client::CredentialsFrom` and the `ReadCredentials`, `ParseCredentials`, and `MissingCredentials` errors.
+- `salesforce_core` pins the generated crates with `=x.y.z`.
+- `CONTRIBUTORS.md` is renamed to `CONTRIBUTING.md`, and the development notes moved there from the README.
+
+### Added
+- `bulkapi::QueryClient::result_pages` returns `Pages`, which walks every result page with `next_page().await`. A failed page is retried on the next call.
+- `client::Client::builder()`. `client::Builder::new()` still works.
+- `client::Builder` setters: `client_id`, `client_secret`, `username`, `password`, `instance_url`, `tenant_id`.
+- `client::Error::MissingClientId` and `MissingInstanceUrl`.
+
+### Fixed
+- Bulk query results past the first page couldn't be read, because `get_results` dropped the `Sforce-Locator` header.
+
 ## [0.20.1]
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 mod common;
 
-use salesforce_core::client::{self, Credentials};
+use salesforce_core::client;
 use salesforce_core::secrecy::ExposeSecret;
 
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -53,15 +53,10 @@ async fn test_reconnect() -> Result {
 
 #[tokio::test]
 async fn test_invalid_credentials_rejected() -> Result {
-    let result = client::Builder::new()
-        .credentials(Credentials {
-            client_id: "invalid_id".to_string(),
-            client_secret: Some("invalid_secret".into()),
-            username: None,
-            password: None,
-            instance_url: "https://login.salesforce.com".to_string(),
-            tenant_id: "invalid_tenant".to_string(),
-        })
+    let result = client::Client::builder()
+        .client_id("invalid_id")
+        .client_secret("invalid_secret")
+        .instance_url("https://login.salesforce.com")
         .build()?
         .connect()
         .await;

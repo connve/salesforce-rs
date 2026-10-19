@@ -5,7 +5,92 @@ use crate::client;
 use crate::http::{check_path_segments, InvalidPathSegment};
 use salesforce_core_bulkapi::types::{CreateQueryJobRequest, ErrorResponse, QueryJobInfo};
 use salesforce_core_bulkapi::{ByteStream, Client as GeneratedClient, Error as GeneratedError};
+use std::fmt;
 use std::num::NonZeroU64;
+
+/// One page of a query job's results, from [`QueryClient::get_results`].
+#[non_exhaustive]
+pub struct QueryResults {
+    /// CSV data for this page.
+    pub body: ByteStream,
+    /// Locator for the next page, or `None` on the last page. Pass it to
+    /// [`QueryClient::get_results`] to fetch the next page.
+    pub locator: Option<String>,
+    /// Number of records in this page, from `Sforce-NumberOfRecords`.
+    pub number_of_records: Option<u64>,
+}
+
+impl fmt::Debug for QueryResults {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QueryResults")
+            .field("locator", &self.locator)
+            .field("number_of_records", &self.number_of_records)
+            .finish_non_exhaustive()
+    }
+}
+
+impl QueryResults {
+    fn from_response(response: salesforce_core_bulkapi::ResponseValue<ByteStream>) -> Self {
+        let header = |name: &str| {
+            response
+                .headers()
+                .get(name)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_owned)
+        };
+        // Salesforce marks the last page with the literal string "null".
+        let locator = header("Sforce-Locator").filter(|l| !l.is_empty() && l != "null");
+        let number_of_records = header("Sforce-NumberOfRecords").and_then(|n| n.parse().ok());
+        Self {
+            body: response.into_inner(),
+            locator,
+            number_of_records,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Cursor {
+    First,
+    Next(String),
+    Done,
+}
+
+/// Every page of a query job's results, from [`QueryClient::result_pages`].
+///
+/// A failed request leaves the position unchanged, so calling
+/// [`next_page`](Self::next_page) again retries the same page.
+#[must_use = "pages do nothing until `.next_page().await` is called"]
+#[derive(Debug)]
+pub struct Pages<'a> {
+    query_client: &'a QueryClient,
+    job_id: String,
+    max_records: Option<NonZeroU64>,
+    cursor: Cursor,
+}
+
+impl Pages<'_> {
+    /// The next page, or `None` after the last one.
+    #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
+    pub async fn next_page(&mut self) -> Option<Result<QueryResults, Error>> {
+        let locator = match &self.cursor {
+            Cursor::First => None,
+            Cursor::Next(locator) => Some(locator.as_str()),
+            Cursor::Done => return None,
+        };
+        let result = self
+            .query_client
+            .get_results(&self.job_id, self.max_records, locator)
+            .await;
+        if let Ok(page) = &result {
+            self.cursor = match &page.locator {
+                Some(locator) => Cursor::Next(locator.clone()),
+                None => Cursor::Done,
+            };
+        }
+        Some(result)
+    }
+}
 
 /// Client for Bulk API v2.0 Query operations.
 ///
@@ -54,19 +139,14 @@ impl QueryClient {
     ///
     /// ```no_run
     /// use salesforce_core::bulkapi::{ClientBuilder, CreateQueryJobRequest, QueryOperation};
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -111,19 +191,14 @@ impl QueryClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -147,54 +222,57 @@ impl QueryClient {
         Ok(response.into_inner())
     }
 
-    /// Retrieves the results of a completed query job.
+    /// Retrieves one page of the results of a completed query job.
     ///
-    /// Results are returned as a CSV stream. For large result sets, use pagination
-    /// with the `locator` parameter.
+    /// Large result sets span several pages. The returned
+    /// [`QueryResults::locator`] points at the next page and is `None` on the
+    /// last one. [`result_pages`](Self::result_pages) walks every page for you.
     ///
     /// # Arguments
     ///
     /// * `job_id` - The unique identifier of the query job
     /// * `max_records` - Optional maximum number of records to return per
     ///   request; `NonZeroU64::new(n)` builds it from a plain number
-    /// * `locator` - Optional locator for pagination (from previous response headers)
+    /// * `locator` - `None` for the first page, then the previous page's
+    ///   [`QueryResults::locator`]
     ///
     /// # Returns
     ///
-    /// A byte stream containing CSV data with the query results.
+    /// The page's CSV data, the locator for the next page, and the page's
+    /// record count.
     ///
     /// # Example
     ///
     /// ```no_run
     /// use futures_util::StreamExt;
     /// use std::num::NonZeroU64;
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
     /// let bulk_client = ClientBuilder::new(auth_client).build()?;
     /// let query_client = bulk_client.query();
     ///
-    /// let mut results = query_client
-    ///     .get_results("750xx0000000001AAA", NonZeroU64::new(5000), None)
-    ///     .await?;
-    ///
-    /// // Stream the CSV data
-    /// while let Some(chunk) = results.next().await {
-    ///     let chunk = chunk?;
-    ///     // Process chunk...
+    /// let mut locator = None;
+    /// loop {
+    ///     let mut page = query_client
+    ///         .get_results("750xx0000000001AAA", NonZeroU64::new(5000), locator.as_deref())
+    ///         .await?;
+    ///     while let Some(chunk) = page.body.next().await {
+    ///         let chunk = chunk?;
+    ///         // Process chunk...
+    ///     }
+    ///     match page.locator {
+    ///         Some(next) => locator = Some(next),
+    ///         None => break,
+    ///     }
     /// }
     /// # Ok(())
     /// # }
@@ -205,14 +283,67 @@ impl QueryClient {
         job_id: &str,
         max_records: Option<NonZeroU64>,
         locator: Option<&str>,
-    ) -> Result<ByteStream, Error> {
+    ) -> Result<QueryResults, Error> {
         require_path_segments(&[job_id])?;
         let client = self.generated().await?;
         let response = client
             .get_query_job_results(job_id, locator, max_records)
             .await
             .map_err(classify_generated_error)?;
-        Ok(response.into_inner())
+        Ok(QueryResults::from_response(response))
+    }
+
+    /// Iterates over every page of the results of a completed query job,
+    /// following [`QueryResults::locator`] until the last page.
+    ///
+    /// Pages are fetched one after another. To download them in parallel,
+    /// use [`get_result_pages`](Self::get_result_pages).
+    ///
+    /// # Arguments
+    ///
+    /// * `job_id` - The unique identifier of the query job
+    /// * `max_records` - Optional maximum number of records per page
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use futures_util::StreamExt;
+    /// # use salesforce_core::client;
+    /// # use salesforce_core::bulkapi::ClientBuilder;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
+    /// #     .build()?
+    /// #     .connect()
+    /// #     .await?;
+    /// let bulk_client = ClientBuilder::new(auth_client).build()?;
+    /// let query_client = bulk_client.query();
+    ///
+    /// let mut pages = query_client.result_pages("750xx0000000001AAA", None);
+    /// while let Some(page) = pages.next_page().await {
+    ///     let mut body = page?.body;
+    ///     while let Some(chunk) = body.next().await {
+    ///         let chunk = chunk?;
+    ///         // Process chunk...
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn result_pages(
+        &self,
+        job_id: impl Into<String>,
+        max_records: Option<NonZeroU64>,
+    ) -> Pages<'_> {
+        Pages {
+            query_client: self,
+            job_id: job_id.into(),
+            max_records,
+            cursor: Cursor::First,
+        }
     }
 
     /// Deletes a query job.
@@ -226,19 +357,14 @@ impl QueryClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -277,19 +403,14 @@ impl QueryClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -338,19 +459,14 @@ impl QueryClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -406,19 +522,14 @@ impl QueryClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;

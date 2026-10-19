@@ -7,21 +7,16 @@
 //! # Example
 //!
 //! ```no_run
-//! use salesforce_core::client::{self, Credentials};
+//! use salesforce_core::client;
 //! use salesforce_core::bulkapi::ClientBuilder;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create and connect auth client
-//! let auth_client = client::Builder::new()
-//!     .credentials(Credentials {
-//!         client_id: "...".to_string(),
-//!         client_secret: Some("...".into()),
-//!         username: None,
-//!         password: None,
-//!         instance_url: "https://your-instance.salesforce.com".to_string(),
-//!         tenant_id: "...".to_string(),
-//!     })
+//! let auth_client = client::Client::builder()
+//!     .client_id("...")
+//!     .client_secret("...")
+//!     .instance_url("https://your-instance.my.salesforce.com")
 //!     .build()?
 //!     .connect()
 //!     .await?;
@@ -50,6 +45,7 @@ pub use client::{Client, ClientBuilder, Error as ClientError};
 /// Re-export error types from query and ingest modules.
 pub use ingest::Error as IngestError;
 pub use query::Error as QueryError;
+pub use query::{Pages, QueryResults};
 
 /// Re-export commonly used types from the generated client.
 pub use salesforce_core_bulkapi::types::{

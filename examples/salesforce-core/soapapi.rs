@@ -8,16 +8,16 @@ use salesforce_core::restapi::ClientBuilder as RestClientBuilder;
 use salesforce_core::soapapi::ClientBuilder as SoapClientBuilder;
 use serde_json::json;
 use std::env;
-use std::path::PathBuf;
 use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let credentials_path = PathBuf::from(env::var("SFDC_CREDENTIALS")?);
-    let auth_client = client::Builder::new()
-        .credentials_path(credentials_path)
+    let credentials: client::Credentials =
+        serde_json::from_str(&std::fs::read_to_string(env::var("SFDC_CREDENTIALS")?)?)?;
+    let auth_client = client::Client::builder()
+        .credentials(credentials)
         .build()?
         .connect()
         .await?;

@@ -9,12 +9,12 @@ jobs:
   detect-version:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.detect-and-tag.outputs.tag }}
-      previous-tag: ${{ steps.detect-and-tag.outputs.previous-tag }}
-      version-changed: ${{ steps.detect-and-tag.outputs.tag != '' && steps.detect-and-tag.outputs.tag != steps.detect-and-tag.outputs.previous-tag }}
+      tag: ${{ steps.detect.outputs.tag }}
+      previous-tag: ${{ steps.detect.outputs.previous-tag }}
+      version-changed: ${{ steps.detect.outputs.version-changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,12 +26,20 @@ jobs:
           VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Detect and tag new version
-        id: detect-and-tag
-        uses: salsify/action-detect-and-tag-new-version@v2
-        with:
-          version-command: |
-            grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
+      # A version without a tag is unreleased; `gh release create` tags it.
+      - name: Detect unreleased version
+        id: detect
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          TAG="v${VERSION}"
+          if git rev-parse --quiet --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "version-changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "version-changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "previous-tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
 
   create-release:
     needs: detect-version
@@ -57,7 +65,7 @@ jobs:
             if [ -z "${{ needs.detect-version.outputs.previous-tag }}" ]; then
               CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges -1)
             else
-              CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges ${{ needs.detect-version.outputs.previous-tag }}..${{ needs.detect-version.outputs.tag }})
+              CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges ${{ needs.detect-version.outputs.previous-tag }}..HEAD)
             fi
           fi
 
@@ -73,6 +81,7 @@ jobs:
         run: |
           printf '%s\n' "$CHANGELOG" > release-notes.md
           gh release create "$TAG" \
+            --target "${{ github.sha }}" \
             --title "Release $TAG" \
             --notes-file release-notes.md
 

@@ -6,6 +6,8 @@
 
 Unofficial Rust SDK family for the Salesforce platform.
 
+> Not affiliated with or endorsed by Salesforce, Inc.
+
 ## Crates
 
 | Crate | Product cloud |
@@ -33,71 +35,10 @@ salesforce-rs/
     └── salesforce-core/
 ```
 
-## Development
+## Contributing
 
-### Running Tests
-
-```bash
-# Run all tests (unit + doc tests)
-cargo test --workspace
-
-# Run tests with output
-cargo test --workspace -- --nocapture
-
-# Run specific test
-cargo test test_name
-```
-
-### Running Examples
-
-All examples load credentials from a JSON file pointed to by `SFDC_CREDENTIALS`:
-
-```bash
-cat > credentials.json <<'EOF'
-{
-  "client_id": "your_client_id",
-  "client_secret": "your_client_secret",
-  "instance_url": "https://your-instance.my.salesforce.com",
-  "tenant_id": "your_tenant_id"
-}
-EOF
-
-export SFDC_CREDENTIALS=$PWD/credentials.json
-
-cargo run --example restapi
-```
-
-### Running Integration Tests
-
-Integration tests use the same `SFDC_CREDENTIALS` env var. Without it, they skip silently:
-
-```bash
-SFDC_CREDENTIALS=$PWD/credentials.json cargo test -p salesforce_core --test '*'
-```
-
-### Releasing
-
-Bump the version across the workspace and all path-dep declarations in one command:
-
-```bash
-cargo install cargo-workspaces  # one-time
-cargo workspaces version --no-git-commit --yes patch  # or: minor, major
-```
-
-Commit the resulting `Cargo.toml` changes and merge to `main`. The release workflow detects the version bump, tags the commit, and publishes to crates.io.
-
-### Code Quality Standards
-
-- **No panics in production**: All production code uses `Result` types with `?` operator
-- **Error handling**: Custom error types use `thiserror` with proper source chain preservation
-- **Documentation**: All public APIs have rustdoc with examples
-- **Testing**: Unit tests, doc tests, and opt-in integration tests against a real Salesforce org
-- **Dependency management**: All dependencies use workspace-level version management
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
 MPL-2.0
-
----
-
-This is an unofficial SDK and is not affiliated with or endorsed by Salesforce.

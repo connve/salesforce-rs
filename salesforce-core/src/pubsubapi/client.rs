@@ -100,12 +100,14 @@ impl tonic::service::Interceptor for ContextInterceptor {
 /// ```no_run
 /// use salesforce_core::client;
 /// use salesforce_core::pubsubapi::{Client, ENDPOINT};
-/// use std::path::PathBuf;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let auth_client = client::Builder::new()
-///     .credentials_path(PathBuf::from("credentials.json"))
+/// let auth_client = client::Client::builder()
+///     .client_id("...")
+///     .client_secret("...")
+///     .instance_url("https://your-instance.my.salesforce.com")
+///     .tenant_id("...")
 ///     .build()?
 ///     .connect()
 ///     .await?;
@@ -198,12 +200,14 @@ impl Client {
     /// ```no_run
     /// use salesforce_core::client;
     /// use salesforce_core::pubsubapi::{Client, ENDPOINT};
-    /// use std::path::PathBuf;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let auth_client = client::Builder::new()
-    ///     .credentials_path(PathBuf::from("credentials.json"))
+    /// let auth_client = client::Client::builder()
+    ///     .client_id("...")
+    ///     .client_secret("...")
+    ///     .instance_url("https://your-instance.my.salesforce.com")
+    ///     .tenant_id("...")
     ///     .build()?
     ///     .connect()
     ///     .await?;
@@ -389,8 +393,6 @@ impl Client {
 #[cfg(test)]
 mod tests {
 
-    use std::{fs, path::PathBuf};
-
     use super::*;
     use tonic::service::Interceptor;
 
@@ -400,21 +402,13 @@ mod tests {
             .connect()
             .await
             .unwrap();
-        let creds: &str = r#"
-            {
-                "client_id": "some_client_id",
-                "client_secret": "some_client_secret",
-                "instance_url": "https://mydomain.salesforce.com",
-                "tenant_id": "some_tenant_id"
-            }"#;
-        let mut path = PathBuf::new();
-        path.push("credentials.json");
-        let _ = fs::write(path.clone(), creds);
-        let client = client::Builder::new()
-            .credentials_path(path.clone())
+        let client = client::Client::builder()
+            .client_id("some_client_id")
+            .client_secret("some_client_secret")
+            .instance_url("https://mydomain.salesforce.com")
+            .tenant_id("some_tenant_id")
             .build()
             .unwrap();
-        let _ = fs::remove_file(path);
         let result = Client::new(channel, client);
         assert!(matches!(result, Err(Error::MissingTokenResponse)));
     }
@@ -424,22 +418,13 @@ mod tests {
         use oauth2::basic::BasicTokenResponse;
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
-        let creds: &str = r#"
-            {
-                "client_id": "some_client_id",
-                "client_secret": "some_client_secret",
-                "instance_url": "https://mydomain.salesforce.com",
-                "tenant_id": "some_tenant_id"
-            }"#;
-        let mut path = PathBuf::new();
-        path.push(format!("test_creds_{}.json", std::process::id()));
-        let _ = fs::write(path.clone(), creds);
-
-        let mut client = client::Builder::new()
-            .credentials_path(path.clone())
+        let mut client = client::Client::builder()
+            .client_id("some_client_id")
+            .client_secret("some_client_secret")
+            .instance_url("https://mydomain.salesforce.com")
+            .tenant_id("some_tenant_id")
             .build()
             .unwrap();
-        let _ = fs::remove_file(path);
 
         // Manually set token but not instance_url
         let token = BasicTokenResponse::new(
@@ -466,22 +451,13 @@ mod tests {
         use oauth2::basic::BasicTokenResponse;
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
-        let creds: &str = r#"
-            {
-                "client_id": "some_client_id",
-                "client_secret": "some_client_secret",
-                "instance_url": "https://mydomain.salesforce.com",
-                "tenant_id": "some_tenant_id"
-            }"#;
-        let mut path = PathBuf::new();
-        path.push(format!("test_creds_tenant_{}.json", std::process::id()));
-        let _ = fs::write(path.clone(), creds);
-
-        let mut client = client::Builder::new()
-            .credentials_path(path.clone())
+        let mut client = client::Client::builder()
+            .client_id("some_client_id")
+            .client_secret("some_client_secret")
+            .instance_url("https://mydomain.salesforce.com")
+            .tenant_id("some_tenant_id")
             .build()
             .unwrap();
-        let _ = fs::remove_file(path);
 
         // Manually set token and instance_url but not tenant_id
         let token = BasicTokenResponse::new(
@@ -508,15 +484,11 @@ mod tests {
         use oauth2::basic::BasicTokenResponse;
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -543,15 +515,11 @@ mod tests {
         use oauth2::basic::BasicTokenResponse;
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -579,15 +547,11 @@ mod tests {
         use oauth2::basic::BasicTokenResponse;
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -614,15 +578,11 @@ mod tests {
         use oauth2::basic::BasicTokenResponse;
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -678,15 +638,11 @@ mod tests {
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
         // Create a client with all valid data
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "client123".to_string(),
-                client_secret: Some("secret123".into()),
-                username: None,
-                password: None,
-                instance_url: "https://login.salesforce.com".to_string(),
-                tenant_id: "00Dxx0000001gPL".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("client123")
+            .client_secret("secret123")
+            .instance_url("https://login.salesforce.com")
+            .tenant_id("00Dxx0000001gPL")
             .build()
             .unwrap();
 
@@ -716,15 +672,11 @@ mod tests {
         use oauth2::basic::BasicTokenResponse;
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test".to_string(),
-                client_secret: Some("secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test")
+            .client_secret("secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("tenant")
             .build()
             .unwrap();
 
@@ -750,15 +702,11 @@ mod tests {
     #[tokio::test]
     async fn test_all_missing_fields() {
         // Test with completely empty client
-        let client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test".to_string(),
-                client_secret: Some("secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "tenant".to_string(),
-            })
+        let client = client::Client::builder()
+            .client_id("test")
+            .client_secret("secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("tenant")
             .build()
             .unwrap();
 
@@ -776,15 +724,11 @@ mod tests {
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
         // Create client with token
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -817,15 +761,11 @@ mod tests {
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
         // Create client with token
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -859,15 +799,11 @@ mod tests {
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
         // Create client with token
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -900,15 +836,11 @@ mod tests {
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
         // Create client with token
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -935,15 +867,11 @@ mod tests {
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
         // Create client with token but no credentials for reconnect
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -977,15 +905,11 @@ mod tests {
         use oauth2::{AccessToken, EmptyExtraTokenFields};
 
         // Create client with all valid data
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "client123".to_string(),
-                client_secret: Some("secret123".into()),
-                username: None,
-                password: None,
-                instance_url: "https://login.salesforce.com".to_string(),
-                tenant_id: "00Dxx0000001gPL".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("client123")
+            .client_secret("secret123")
+            .instance_url("https://login.salesforce.com")
+            .tenant_id("00Dxx0000001gPL")
             .build()
             .unwrap();
 
