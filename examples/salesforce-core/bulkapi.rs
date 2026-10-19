@@ -23,14 +23,15 @@ use salesforce_core::bulkapi::{
     ClientBuilder, CreateIngestJobRequest, CreateQueryJobRequest, IngestOperation, QueryOperation,
 };
 use salesforce_core::client;
-use std::path::PathBuf;
 use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let credentials_path = PathBuf::from(std::env::var("SFDC_CREDENTIALS")?);
-    let auth_client = client::Builder::new()
-        .credentials_path(credentials_path)
+    let credentials: client::Credentials = serde_json::from_str(&std::fs::read_to_string(
+        std::env::var("SFDC_CREDENTIALS")?,
+    )?)?;
+    let auth_client = client::Client::builder()
+        .credentials(credentials)
         .build()?
         .connect()
         .await?;
@@ -79,13 +80,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     info!("Retrieving query results");
-    let mut results = query_client
-        .get_results(&job.id, std::num::NonZeroU64::new(1000), None)
-        .await?;
-    while let Some(chunk) = results.next().await {
-        let _chunk = chunk?;
+    let mut pages = query_client.result_pages(&job.id, std::num::NonZeroU64::new(1000));
+    let mut page_count = 0;
+    while let Some(page) = pages.next_page().await {
+        let mut body = page?.body;
+        while let Some(chunk) = body.next().await {
+            let _chunk = chunk?;
+        }
+        page_count += 1;
     }
-    info!("Query results retrieved");
+    info!("Query results retrieved in {page_count} pages");
 
     info!("Getting parallel result pages");
     let result_pages = query_client.get_result_pages(&job.id, None).await?;

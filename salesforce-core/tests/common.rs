@@ -30,6 +30,12 @@ macro_rules! skip_if_no_credentials {
     };
 }
 
+/// Reads the credentials JSON file named by `SFDC_CREDENTIALS`.
+pub fn credentials() -> Result<client::Credentials, Box<dyn std::error::Error>> {
+    let path = env::var(CREDENTIALS_ENV)?;
+    Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
+}
+
 /// Creates an authenticated Salesforce client by loading credentials from the
 /// JSON file specified in the `SFDC_CREDENTIALS` environment variable.
 ///
@@ -43,9 +49,8 @@ macro_rules! skip_if_no_credentials {
 /// }
 /// ```
 pub async fn auth_client() -> Result<client::Client, Box<dyn std::error::Error>> {
-    let path = env::var(CREDENTIALS_ENV)?;
-    let client = client::Builder::new()
-        .credentials_path(path.into())
+    let client = client::Client::builder()
+        .credentials(credentials()?)
         .build()?
         .connect()
         .await?;

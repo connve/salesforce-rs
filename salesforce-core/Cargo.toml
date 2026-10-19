@@ -50,6 +50,7 @@ futures-util = { workspace = true, optional = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }
 
 [[example]]
 name = "pubsubapi"
@@ -79,6 +80,11 @@ required-features = ["restapi"]
 [[test]]
 name = "bulkapi"
 path = "tests/bulkapi.rs"
+required-features = ["bulkapi"]
+
+[[test]]
+name = "mock_bulkapi"
+path = "tests/mock_bulkapi.rs"
 required-features = ["bulkapi"]
 
 [[test]]

@@ -55,10 +55,14 @@ The user-facing crate owns:
 
 ### 4. Version & API-version constants
 - One workspace `version` in the root `Cargo.toml`, propagated to all member crates.
-- Use `cargo-workspaces` for releases: `cargo workspaces version --no-git-commit --yes patch`.
+- Use `cargo-workspaces` for releases: `cargo workspaces version --no-git-commit --yes --exact --force '*' patch`.
 - Expose a `DEFAULT_API_VERSION: &str` constant from the wrapper crate's `lib.rs`. Never hardcode version strings at call sites.
 
 ### 5. Credentials via JSON file, not env vars
+The SDK takes credential values through builder setters or a deserializable
+`Credentials` struct. It doesn't read files; where credentials come from is
+up to the application.
+
 Tests and examples load credentials from a JSON file pointed to by a single env var, not from individual `*_USERNAME` / `*_SECRET` env vars. This avoids leaking secrets into shell history and keeps test setup to one line. Integration tests must skip silently when the env var is unset.
 
 ### 6. Retry policy: `is_retryable()` on every public Error
@@ -115,9 +119,9 @@ arguments directly; migrating them is open work.
 - All dependency versions declared once in the root `[workspace.dependencies]`.
 - Member crates use `dep = { workspace = true, features = [...] }`.
 - Never declare versions directly in individual crates.
-- Generated crates are pinned by exact version in `[workspace.dependencies]`
-  alongside their `path`. A release bump has to update both, or the workspace
-  stops resolving.
+- Generated crates are pinned with `=x.y.z` in `[workspace.dependencies]`
+  alongside their `path`. The release bump command in **Git & releases**
+  updates them together with `[workspace.package] version`.
 - We use `resolver = "3"`, so `cargo update` only picks versions that build
   on our `rust-version`. The `test-msrv` CI job checks this.
 - MSRV is 1.88, the minimum required by `progenitor` 0.13 and `tonic` 0.14.
@@ -174,11 +178,14 @@ assert!(matches!(result, Err(Error::MissingClientSecret)));
 assert_eq!(error.to_string(), "Client secret is required for authentication");
 ```
 
-Two tiers, picked by what the code under test touches:
+Three tiers, picked by what the code under test touches:
 
 - **Unit tests**: `#[cfg(test)] mod tests` inline in the file. Default choice
   for validation logic, error classification, and anything that doesn't need
   a live org.
+- **Mock tests**: `salesforce-core/tests/mock_<api>.rs`, against a local
+  `wiremock` server. Use them for request and response handling, such as
+  headers and pagination. They always run.
 - **Integration tests**: `salesforce-core/tests/<api>.rs`, one file per API.
   These hit a real Salesforce org, so they open with `skip_if_no_credentials!()`
   and exit quietly when `SFDC_CREDENTIALS` is unset — `cargo test` has to pass
@@ -193,8 +200,28 @@ bulk job completion), assert that the call succeeds rather than that the data
 has already propagated — the latter is flaky by construction. Say so in a
 comment, so the weak assertion doesn't read as an oversight.
 
+Run them with:
+
+```bash
+cargo test --workspace
+SFDC_CREDENTIALS=$PWD/credentials.json cargo test -p salesforce_core --test '*'
+SFDC_CREDENTIALS=$PWD/credentials.json cargo run --example restapi
+```
+
+The credentials file:
+
+```json
+{
+  "client_id": "your_client_id",
+  "client_secret": "your_client_secret",
+  "instance_url": "https://your-instance.my.salesforce.com",
+  "tenant_id": "your_tenant_id"
+}
+```
+
 **Reference implementations:**
 - Credential loading and the skip macro: `salesforce-core/tests/common.rs`
+- Mock tests: `salesforce-core/tests/mock_bulkapi.rs`
 - REST integration tests, including the asynchronous-propagation case:
   `salesforce-core/tests/restapi.rs`
 - Runnable per-API examples: `examples/salesforce-core/`
@@ -269,7 +296,7 @@ would come back on the next regeneration.
 
 - Commits: conventional-commit style (`feat:`, `fix:`, `chore:`). Be specific about *why*, not just *what*.
 - Commit when you're explicitly asked to.
-- Release flow: bump version via `cargo workspaces version`, merge to `main`, the release workflow tags and publishes to crates.io.
+- Release flow: bump version via `cargo workspaces version --no-git-commit --yes --exact --force '*' <minor|patch>`, merge to `main`, the release workflow tags and publishes to crates.io.
 
 ### Versioning and the changelog
 
@@ -280,19 +307,18 @@ changelog entry — both belong in the PR, not in a later release-time pass.
   Bug fixes with no signature change are a **patch**. A changed or removed
   signature is a breaking change: bump minor while pre-1.0 and mark the entry
   **Breaking:** with a before/after migration line.
-- Bump with `cargo workspaces version --no-git-commit --yes <minor|patch>`.
-  It only rewrites crates that changed since the last tag, so afterwards
-  confirm that `[workspace.package] version` and all four pinned
-  `salesforce_core_*` versions in `[workspace.dependencies]` agree — a partial
-  bump leaves the workspace unable to resolve.
-- Add the entry under a new `## [x.y.z] - YYYY-MM-DD` heading in
+- Bump with
+  `cargo workspaces version --no-git-commit --yes --exact --force '*' <minor|patch>`
+  (install once with `cargo install cargo-workspaces`). It bumps every crate
+  and rewrites the `=x.y.z` pins in `[workspace.dependencies]` in one go.
+- Add the entry under a new `## [x.y.z]` heading in
   `CHANGELOG.md`, grouped **Added** / **Changed** / **Fixed**. Describe what a
   consumer can now do; for anything breaking, show the old and new call side
   by side.
 
 ## What lives where
 
-- **`CONTRIBUTORS.md`** (this file): contributor-facing conventions and
+- **`CONTRIBUTING.md`** (this file): contributor-facing conventions and
   recipe-level guidance. The recipe sections are reusable across sibling SDKs;
   the reference implementations are specific to this repo.
 - **`README.md`**: user-facing — what the crates do, how to install and use them.

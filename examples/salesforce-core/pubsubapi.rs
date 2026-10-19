@@ -3,15 +3,15 @@ use salesforce_core::pubsubapi::{
     Client, FetchRequest, ReplayPreset, SchemaRequest, TopicRequest, ENDPOINT,
 };
 use std::env;
-use std::path::PathBuf;
 use tokio_stream::StreamExt;
 use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let credentials_path = PathBuf::from(env::var("SFDC_CREDENTIALS")?);
-    let client = client::Builder::new()
-        .credentials_path(credentials_path)
+    let credentials: client::Credentials =
+        serde_json::from_str(&std::fs::read_to_string(env::var("SFDC_CREDENTIALS")?)?)?;
+    let client = client::Client::builder()
+        .credentials(credentials)
         .build()?
         .connect()
         .await?;

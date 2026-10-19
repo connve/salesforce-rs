@@ -395,21 +395,16 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
+    /// use salesforce_core::client;
     /// use salesforce_core::restapi;
     /// use serde_json::json;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://localhost".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://localhost")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -544,20 +539,15 @@ impl Client {
     ///
     /// ```no_run
     /// use salesforce_core::chrono::{Duration, Utc};
-    /// use salesforce_core::client::{self, Credentials};
+    /// use salesforce_core::client;
     /// use salesforce_core::restapi;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://localhost".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://localhost")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;

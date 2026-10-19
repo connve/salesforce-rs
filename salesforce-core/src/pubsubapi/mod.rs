@@ -11,12 +11,14 @@
 //! use salesforce_core::client;
 //! use salesforce_core::pubsubapi::Client as PubSubClient;
 //! use salesforce_core_pubsubapi::eventbus;
-//! use std::path::PathBuf;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let auth_client = client::Builder::new()
-//!     .credentials_path(PathBuf::from("credentials.json"))
+//! let auth_client = client::Client::builder()
+//!     .client_id("...")
+//!     .client_secret("...")
+//!     .instance_url("https://your-instance.my.salesforce.com")
+//!     .tenant_id("...")
 //!     .build()?
 //!     .connect()
 //!     .await?;

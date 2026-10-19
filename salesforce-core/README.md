@@ -5,132 +5,42 @@
 
 Unofficial Rust SDK for the **Salesforce Core** (Sales Cloud, Service Cloud, Platform) APIs: REST, Bulk 2.0, Pub/Sub (gRPC), Tooling, and SOAP.
 
+> Not affiliated with or endorsed by Salesforce, Inc.
+
 Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
-
-## Installation
-
-```toml
-[dependencies]
-salesforce_core = "0.20"
-```
-
-## Cargo features
-
-Each API surface is gated behind a feature so applications only pay the
-compile-time cost of what they use. All four are enabled by default.
-
-| Feature      | Enables                                                      |
-|--------------|--------------------------------------------------------------|
-| `restapi`    | SObject CRUD, SOQL query, search, composite collections, flow invocation (REST API) |
-| `bulkapi`    | Bulk API 2.0 query and ingest jobs                           |
-| `toolingapi` | Tooling API (managed event subscriptions)                    |
-| `pubsubapi`  | Pub/Sub API gRPC streaming (pulls in `tonic`)                |
-| `soapapi`    | SOAP API operations (record merge)                           |
-| `trace`      | Adds `#[tracing::instrument]` spans to client methods        |
-
-For a slim build, disable defaults and opt in:
-
-```toml
-salesforce_core = { version = "0.20", default-features = false, features = ["restapi"] }
-```
-
-`chrono` appears in the public API — operations taking a time window accept
-`DateTime<Utc>`. It is re-exported as `salesforce_core::chrono`, so use that
-rather than adding `chrono` to your own dependencies:
-
-```rust
-use salesforce_core::chrono::{Duration, Utc};
-
-let end = Utc::now();
-let deleted = rest.get_deleted("Account", (end - Duration::days(1))..end).send().await?;
-```
 
 ## Quick start
 
-Authenticate with the client credentials OAuth2 flow, then issue REST calls:
+```toml
+[dependencies]
+salesforce_core = "0.21"
+```
 
 ```rust
-use salesforce_core::client;
-use salesforce_core::restapi;
-use serde_json::json;
-use std::path::PathBuf;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let auth = client::Builder::new()
-        .credentials_path(PathBuf::from(std::env::var("SFDC_CREDENTIALS")?))
-        .build()?
-        .connect()
-        .await?;
-
-    let rest = restapi::ClientBuilder::new(auth).build()?;
-
-    let resp = rest.create("Account", json!({ "Name": "Acme" })).send().await?;
-    let record = rest.get("Account", &resp.id).send().await?;
-    println!("{record}");
-    rest.delete("Account", &resp.id).send().await?;
-
-    Ok(())
-}
-```
-
-## Salesforce request headers
-
-Every REST and Composite operation returns a builder that accepts custom
-Salesforce request headers via `.header(name, value)` or `.headers(map)`,
-then is dispatched with `.send().await`:
-
-```rust,no_run
-use salesforce_core::restapi;
+use salesforce_core::{client, restapi};
 use serde_json::json;
 
-# async fn run(rest: restapi::Client) -> Result<(), Box<dyn std::error::Error>> {
-// Override the duplicate rule for a single create:
-let resp = rest
-    .create("Account", json!({ "Name": "Acme" }))
-    .header("Sforce-Duplicate-Rule-Header", "allowSave=true")
-    .send()
+let auth = client::Client::builder()
+    .client_id(client_id)
+    .client_secret(client_secret)
+    .instance_url("https://your-instance.my.salesforce.com")
+    .build()?
+    .connect()
     .await?;
 
-// Or attach several headers, e.g. on a composite update:
-# let request: salesforce_core::restapi::CompositeCollectionUpdateRequest = todo!();
-let _ = rest
-    .composite()
-    .update_records(&request)
-    .header("Sforce-Duplicate-Rule-Header", "allowSave=true")
-    .header("Sforce-Auto-Assign", "FALSE")
-    .send()
-    .await?;
-# Ok(())
-# }
+let rest = restapi::ClientBuilder::new(auth).build()?;
+
+let created = rest.create("Account", json!({ "Name": "Acme" })).send().await?;
+let record = rest.get("Account", &created.id).send().await?;
+rest.delete("Account", &created.id).send().await?;
 ```
 
-The SDK rejects headers it manages itself (`Authorization`, `Content-Type`,
-`Accept`) at `.send()` time with `Error::InvalidHeader`.
+## Credentials
 
-To send the same headers on every request issued by a client, configure them
-once on the builder instead:
-
-```rust,no_run
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use salesforce_core::restapi;
-
-# fn build(auth: salesforce_core::client::Client) -> Result<(), Box<dyn std::error::Error>> {
-let mut defaults = HeaderMap::new();
-defaults.insert(
-    HeaderName::from_static("sforce-call-options"),
-    HeaderValue::from_static("client=my-app"),
-);
-
-let rest = restapi::ClientBuilder::new(auth)
-    .default_headers(defaults)
-    .build()?;
-# let _ = rest;
-# Ok(())
-# }
-```
-
-The credentials JSON file:
+The client authenticates against a Connected App with the client credentials
+flow, or with `AuthFlow::UsernamePassword`. Set each field on
+`client::Builder`, or pass a `Credentials` the application has loaded.
+`Credentials` deserializes from JSON:
 
 ```json
 {
@@ -141,122 +51,86 @@ The credentials JSON file:
 }
 ```
 
-## API coverage
+```rust
+let credentials: client::Credentials = serde_json::from_str(&json)?;
+let auth = client::Client::builder().credentials(credentials).build()?;
+```
 
-### Authentication
+`tenant_id` (the org ID) is only needed for the Pub/Sub API. `username` and
+`password` are only needed for the username-password flow.
 
-| Feature | Status |
-|---------|--------|
-| OAuth2 Client Credentials Flow | Supported |
-| OAuth2 Username-Password Flow | Supported |
-| Automatic Token Refresh | Supported |
-| Session Reconnection | Supported |
+## Pagination
 
-### SObject REST API
+SOQL queries return one batch at a time. Pass `next_records_url` to
+`query_more` until it is `None`:
 
-| Operation | Status |
-|-----------|--------|
-| Create Record | Supported |
-| Get Record | Supported |
-| Get Record by External ID | Supported |
-| Update Record | Supported |
-| Delete Record | Supported |
-| Get Deleted Records | Supported |
-| Get SObject Basic Info | Supported |
-| Describe SObject | Supported |
+```rust
+let mut page = rest.query("SELECT Id FROM Account").send().await?;
+while let Some(next) = page.next_records_url.take() {
+    page = rest.query_more(next).send().await?;
+}
+```
 
-### Composite REST API
+Bulk query results come in pages too. `result_pages` follows the
+`Sforce-Locator` header until the last page:
 
-| Operation | Status |
-|-----------|--------|
-| Create Records (batch) | Supported |
-| Update Records (batch) | Supported |
-| Delete Records (batch) | Supported |
-| Retrieve Records (batch) | Supported |
-| Upsert Records (batch) | Supported |
-| Create Record Tree | Supported |
+```rust
+let mut pages = bulk.query().result_pages(&job.id, None);
+while let Some(page) = pages.next_page().await {
+    let csv = page?.body; // stream of bytes
+}
+```
 
-### Query
+## Request headers
 
-| Operation | Status |
-|-----------|--------|
-| SOQL Query | Supported |
-| SOQL Query All (including deleted and archived) | Supported |
-| Query More (`nextRecordsUrl` pagination) | Supported |
+REST and Composite builders take Salesforce request headers before `.send()`:
 
-### Search
+```rust
+rest.create("Account", json!({ "Name": "Acme" }))
+    .header("Sforce-Duplicate-Rule-Header", "allowSave=true")
+    .send()
+    .await?;
+```
 
-| Operation | Status |
-|-----------|--------|
-| SOSL Search | Supported |
+Headers for every request go on the client with
+`restapi::ClientBuilder::default_headers`. `Authorization`, `Content-Type`,
+and `Accept` are set by the SDK and rejected with `Error::InvalidHeader`.
 
-### Custom Invocable Actions — Flow
+## Cargo features
 
-| Operation | Status |
-|-----------|--------|
-| Invoke Flow (single input) | Supported |
-| Invoke Flow (batch / multiple inputs) | Supported |
+All features except `trace` are enabled by default. For a slim build, turn
+off the defaults and pick what you need:
 
-### Bulk API 2.0 — Query
+```toml
+salesforce_core = { version = "0.21", default-features = false, features = ["restapi"] }
+```
 
-| Operation | Status |
-|-----------|--------|
-| Create Query Job | Supported |
-| Get Query Job Info | Supported |
-| Get Query Results | Supported |
-| Get Query Result Pages | Supported |
-| Get All Query Jobs | Supported |
-| Abort Query Job | Supported |
-| Delete Query Job | Supported |
+`chrono` is re-exported as `salesforce_core::chrono`. Use it for the
+`DateTime<Utc>` arguments, such as the window passed to `get_deleted`.
 
-### Bulk API 2.0 — Ingest
+## Coverage
 
-| Operation | Status |
-|-----------|--------|
-| Create Ingest Job | Supported |
-| Get Ingest Job Info | Supported |
-| Upload Job Data | Supported |
-| Mark Upload Complete | Supported |
-| Get Successful Results | Supported |
-| Get Failed Results | Supported |
-| Get Unprocessed Results | Supported |
-| Get All Ingest Jobs | Supported |
-| Abort Ingest Job | Supported |
-| Delete Ingest Job | Supported |
+| API | Feature | Methods |
+| --- | --- | --- |
+| Auth | (always) | `client::Builder`, `connect`, `access_token`, `reconnect` |
+| SObject | `restapi` | [`create`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_basic_info_post.htm), [`get`](https://developer.salesforce.com/docs/platform/api-rest/guide/resources-sobject-retrieve.html), [`get_by_external_id`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_upsert.htm), [`update`](https://developer.salesforce.com/docs/platform/api-rest/guide/resources-sobject-retrieve-patch.html), [`delete`](https://developer.salesforce.com/docs/platform/api-rest/guide/dome-delete-record.html), [`get_deleted`](https://developer.salesforce.com/docs/platform/api-rest/guide/resources-getdeleted.html), [`describe`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_describe.htm), [`basic_info`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_basic_info.htm) |
+| Composite | `restapi` | [`create_records`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_create.htm), [`get_records`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_retrieve.htm), [`update_records`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_update.htm), `upsert_records`, [`delete_records`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_delete.htm), [`create_record_tree`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobject_tree.htm) |
+| Query | `restapi` | [`query`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm), [`query_all`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_queryall.htm), [`query_more`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query_more_results.htm) |
+| Search | `restapi` | [`search`](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_search.htm) |
+| Flow | `restapi` | [`invoke_flow`](https://developer.salesforce.com/docs/platform/api-rest/guide/resources-actions-invocable-custom.html), [`invoke_flow_batch`](https://developer.salesforce.com/docs/platform/api-rest/guide/resources-actions-invocable-custom.html) |
+| Bulk 2.0 query | `bulkapi` | [`create_job`](https://developer.salesforce.com/docs/platform/api-asynch/guide/query-create-job.html), [`get_job`](https://developer.salesforce.com/docs/platform/api-asynch/guide/query-get-one-job.html), `get_results`, `result_pages`, `get_result_pages`, `get_all_jobs`, [`abort_job`](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_abort_job.htm), [`delete_job`](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/delete_job.htm) |
+| Bulk 2.0 ingest | `bulkapi` | [`create_job`](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/create_job.htm), [`get_job`](https://developer.salesforce.com/docs/platform/api-asynch/guide/get-job-info.html), `upload_data`, [`mark_upload_complete`](https://developer.salesforce.com/docs/platform/api-asynch/guide/close-job.html), `get_successful_results`, [`get_failed_results`](https://developer.salesforce.com/docs/platform/api-asynch/guide/get-job-failed-results.html), `get_unprocessed_results`, [`get_all_jobs`](https://developer.salesforce.com/docs/platform/api-asynch/guide/get-all-jobs.html), `abort_job`, [`delete_job`](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/delete_job.htm) |
+| Pub/Sub (gRPC) | `pubsubapi` | [`get_topic`](https://developer.salesforce.com/docs/platform/pub-sub-api/references/methods/gettopic-rpc.html), `get_schema`, [`subscribe`](https://developer.salesforce.com/docs/platform/pub-sub-api/references/methods/subscribe-rpc.html), [`managed_subscribe`](https://developer.salesforce.com/docs/platform/pub-sub-api/references/methods/managedsubscribe-rpc.html), `publish`, [`publish_stream`](https://developer.salesforce.com/docs/platform/pub-sub-api/references/methods/publishstream-rpc.html) |
+| SOAP | `soapapi` | [`merge`](https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_calls_merge.htm) |
+| Tooling | `toolingapi` | [`create_managed_event_subscription`](https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/tooling_api_objects_managedeventsubscription.htm) |
 
-### Pub/Sub API (gRPC)
-
-| Operation | Status |
-|-----------|--------|
-| Get Topic | Supported |
-| Get Schema | Supported |
-| Subscribe | Supported |
-| Managed Subscribe | Supported |
-| Publish | Supported |
-| Publish Stream | Supported |
-| Get Topic by Schema ID | Supported |
-
-### SOAP API
-
-| Operation | Status |
-|-----------|--------|
-| Merge Records | Supported |
-
-### Tooling API
-
-| Operation | Status |
-|-----------|--------|
-| Create Managed Event Subscription | Supported |
+The `trace` feature adds `tracing` spans to client methods.
 
 ## Examples
 
-See the [examples directory](https://github.com/connve/salesforce-rs/tree/main/examples/salesforce-core):
-
-- [`restapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/restapi.rs) — SObject CRUD operations and SOQL queries
-- [`bulkapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/bulkapi.rs) — Query and ingest for large datasets
-- [`toolingapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/toolingapi.rs) — Managed event subscriptions
-- [`pubsubapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/pubsubapi.rs) — Platform events and CDC via gRPC
-- [`soapapi`](https://github.com/connve/salesforce-rs/blob/main/examples/salesforce-core/soapapi.rs) — Record merge via SOAP API
+Runnable examples live in
+[`examples/salesforce-core`](https://github.com/connve/salesforce-rs/tree/main/examples/salesforce-core).
+They read the credentials JSON from the path in `SFDC_CREDENTIALS`:
 
 ```bash
 export SFDC_CREDENTIALS=$PWD/credentials.json

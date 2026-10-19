@@ -15,7 +15,6 @@ use salesforce_core::client;
 use salesforce_core::restapi::ClientBuilder;
 use serde_json::json;
 use std::env;
-use std::path::PathBuf;
 use tracing::info;
 
 #[tokio::main]
@@ -52,8 +51,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     })?;
 
-    let auth_client = client::Builder::new()
-        .credentials_path(PathBuf::from(credentials_path))
+    let credentials: client::Credentials =
+        serde_json::from_str(&std::fs::read_to_string(credentials_path)?)?;
+    let auth_client = client::Client::builder()
+        .credentials(credentials)
         .build()?
         .connect()
         .await?;

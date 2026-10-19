@@ -13,21 +13,16 @@ use std::sync::Arc;
 /// # Example
 ///
 /// ```no_run
-/// use salesforce_core::client::{self, Credentials};
+/// use salesforce_core::client;
 /// use salesforce_core::bulkapi::ClientBuilder;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// // First, create and connect the auth client
-/// let auth_client = client::Builder::new()
-///     .credentials(Credentials {
-///         client_id: "...".to_string(),
-///         client_secret: Some("...".into()),
-///         username: None,
-///         password: None,
-///         instance_url: "https://your-instance.salesforce.com".to_string(),
-///         tenant_id: "...".to_string(),
-///     })
+/// let auth_client = client::Client::builder()
+///     .client_id("...")
+///     .client_secret("...")
+///     .instance_url("https://your-instance.my.salesforce.com")
 ///     .build()?
 ///     .connect()
 ///     .await?;
@@ -103,20 +98,15 @@ impl ClientBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
+    /// use salesforce_core::client;
     /// use salesforce_core::bulkapi::ClientBuilder;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let auth_client = client::Builder::new()
-    ///     .credentials(Credentials {
-    ///         client_id: "...".to_string(),
-    ///         client_secret: Some("...".into()),
-    ///         username: None,
-    ///         password: None,
-    ///         instance_url: "https://your-instance.salesforce.com".to_string(),
-    ///         tenant_id: "...".to_string(),
-    ///     })
+    /// let auth_client = client::Client::builder()
+    ///     .client_id("...")
+    ///     .client_secret("...")
+    ///     .instance_url("https://your-instance.my.salesforce.com")
     ///     .build()?
     ///     .connect()
     ///     .await?;
@@ -154,19 +144,14 @@ impl ClientBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -197,20 +182,15 @@ impl ClientBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # use std::time::Duration;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -241,20 +221,15 @@ impl ClientBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # use std::time::Duration;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -285,19 +260,14 @@ impl ClientBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -356,19 +326,14 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -388,19 +353,14 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// # use salesforce_core::client::{self, Credentials};
+    /// # use salesforce_core::client;
     /// # use salesforce_core::bulkapi::ClientBuilder;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let auth_client = client::Builder::new()
-    /// #     .credentials(Credentials {
-    /// #         client_id: "...".to_string(),
-    /// #         client_secret: Some("...".into()),
-    /// #         username: None,
-    /// #         password: None,
-    /// #         instance_url: "https://your-instance.salesforce.com".to_string(),
-    /// #         tenant_id: "...".to_string(),
-    /// #     })
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
     /// #     .build()?
     /// #     .connect()
     /// #     .await?;
@@ -450,15 +410,11 @@ mod tests {
     use oauth2::{AccessToken, EmptyExtraTokenFields};
 
     fn create_mock_auth_client() -> client::Client {
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_client_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_client_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .tenant_id("test_tenant")
             .build()
             .unwrap();
 
@@ -516,15 +472,10 @@ mod tests {
 
     #[test]
     fn test_base_url_without_instance_url() {
-        let mut client = client::Builder::new()
-            .credentials(client::Credentials {
-                client_id: "test_client_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
+        let mut client = client::Client::builder()
+            .client_id("test_client_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
             .build()
             .unwrap();
 

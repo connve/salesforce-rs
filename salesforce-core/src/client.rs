@@ -2,8 +2,6 @@ use oauth2::basic::BasicTokenType;
 use oauth2::{EmptyExtraTokenFields, RefreshToken, TokenResponse};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -18,21 +16,7 @@ const DEFAULT_TOKEN_REFRESH_BUFFER_SECONDS: u64 = 300;
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
-    /// Failed to read credentials file from disk.
-    #[error("Failed to read credentials file at {path}: {source}")]
-    ReadCredentials {
-        /// Path to the credentials file that failed to read.
-        path: std::path::PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-    /// Failed to parse credentials JSON.
-    #[error("Failed to parse credentials JSON: {source}")]
-    ParseCredentials {
-        #[source]
-        source: serde_json::Error,
-    },
-    /// Invalid URL format in credentials.
+    /// The instance URL is not a valid absolute URL.
     #[error("Invalid URL format: {source}")]
     ParseUrl {
         #[source]
@@ -47,9 +31,12 @@ pub enum Error {
     /// HTTP request failed during OAuth2 token exchange.
     #[error("OAuth2 request failed with status {status}: {body}")]
     OAuth2RequestFailed { status: u16, body: String },
-    /// Credentials were not provided to the builder.
-    #[error("Credentials not provided: call credentials() or credentials_path() before build()")]
-    MissingCredentials,
+    /// Client ID was not provided to the builder.
+    #[error("Client ID not provided: call client_id() or credentials() before build()")]
+    MissingClientId,
+    /// Instance URL was not provided to the builder.
+    #[error("Instance URL not provided: call instance_url() or credentials() before build()")]
+    MissingInstanceUrl,
     /// Client secret is required for this authentication flow.
     #[error("Client secret is required for authentication")]
     MissingClientSecret,
@@ -228,6 +215,11 @@ pub enum AuthFlow {
 /// Obtained from a Salesforce Connected App. Different fields are required
 /// depending on the [`AuthFlow`] used.
 ///
+/// Deserializes from JSON, ignoring unknown fields, so an application can
+/// load it from wherever it keeps secrets and pass it to
+/// [`Builder::credentials`]. The individual [`Builder`] setters cover the
+/// same fields.
+///
 /// # Creating a Connected App
 ///
 /// 1. In Salesforce Setup, navigate to App Manager
@@ -236,36 +228,19 @@ pub enum AuthFlow {
 /// 4. Set the callback URL and select OAuth scopes
 /// 5. Copy the Consumer Key (client_id) and Consumer Secret (client_secret)
 ///
-/// # Examples
-///
-/// ## Client Credentials
+/// # Example
 ///
 /// ```
 /// use salesforce_core::client::Credentials;
 ///
-/// let creds = Credentials {
-///     client_id: "your_client_id".to_string(),
-///     client_secret: Some("your_client_secret".into()),
-///     username: None,
-///     password: None,
-///     instance_url: "https://your-instance.salesforce.com".to_string(),
-///     tenant_id: "your_tenant_id".to_string(),
-/// };
-/// ```
-///
-/// ## Username-Password
-///
-/// ```
-/// use salesforce_core::client::Credentials;
-///
-/// let creds = Credentials {
-///     client_id: "your_client_id".to_string(),
-///     client_secret: Some("your_client_secret".into()),
-///     username: Some("user@example.com".to_string()),
-///     password: Some("your_password".into()),
-///     instance_url: "https://your-instance.salesforce.com".to_string(),
-///     tenant_id: "your_tenant_id".to_string(),
-/// };
+/// let creds: Credentials = serde_json::from_str(
+///     r#"{
+///         "client_id": "your_client_id",
+///         "client_secret": "your_client_secret",
+///         "instance_url": "https://your-instance.my.salesforce.com"
+///     }"#,
+/// )?;
+/// # Ok::<(), serde_json::Error>(())
 /// ```
 #[derive(Debug, Deserialize, Clone)]
 pub struct Credentials {
@@ -295,16 +270,9 @@ pub struct Credentials {
     /// For sandbox orgs, use `https://test.salesforce.com`.
     pub instance_url: String,
     /// Organization ID (15 or 18 character Salesforce Org ID).
-    pub tenant_id: String,
-}
-
-/// Source for loading credentials.
-#[derive(Debug, Clone)]
-pub enum CredentialsFrom {
-    /// Load credentials from a JSON file.
-    Path(PathBuf),
-    /// Use credentials provided directly.
-    Value(Credentials),
+    ///
+    /// Required for: the Pub/Sub API
+    pub tenant_id: Option<String>,
 }
 
 /// OAuth2 client for Salesforce API authentication.
@@ -317,20 +285,14 @@ pub enum CredentialsFrom {
 /// ## Client Credentials Flow (Default)
 ///
 /// ```no_run
-/// use salesforce_core::client::{self, Credentials, AuthFlow};
+/// use salesforce_core::client;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = client::Builder::new()
-///     .credentials(Credentials {
-///         client_id: "your_client_id".to_string(),
-///         client_secret: Some("your_client_secret".into()),
-///         username: None,
-///         password: None,
-///         instance_url: "https://your-instance.salesforce.com".to_string(),
-///         tenant_id: "your_tenant_id".to_string(),
-///     })
-///     // .auth_flow(AuthFlow::ClientCredentials) // Optional, this is the default
+/// let client = client::Client::builder()
+///     .client_id("your_client_id")
+///     .client_secret("your_client_secret")
+///     .instance_url("https://your-instance.my.salesforce.com")
 ///     .build()?
 ///     .connect()
 ///     .await?;
@@ -341,37 +303,17 @@ pub enum CredentialsFrom {
 /// ## Username-Password Flow
 ///
 /// ```no_run
-/// use salesforce_core::client::{self, Credentials, AuthFlow};
+/// use salesforce_core::client::{self, AuthFlow};
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = client::Builder::new()
-///     .credentials(Credentials {
-///         client_id: "your_client_id".to_string(),
-///         client_secret: Some("your_client_secret".into()),
-///         username: Some("user@example.com".to_string()),
-///         password: Some("your_password".into()),
-///         instance_url: "https://your-instance.salesforce.com".to_string(),
-///         tenant_id: "your_tenant_id".to_string(),
-///     })
+/// let client = client::Client::builder()
+///     .client_id("your_client_id")
+///     .client_secret("your_client_secret")
+///     .username("user@example.com")
+///     .password("your_password")
+///     .instance_url("https://your-instance.my.salesforce.com")
 ///     .auth_flow(AuthFlow::UsernamePassword)
-///     .build()?
-///     .connect()
-///     .await?;
-/// # Ok(())
-/// # }
-/// ```
-///
-/// ## Loading Credentials from File
-///
-/// ```no_run
-/// use salesforce_core::client;
-/// use std::path::PathBuf;
-///
-/// # #[tokio::main]
-/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = client::Builder::new()
-///     .credentials_path(PathBuf::from("credentials.json"))
 ///     .build()?
 ///     .connect()
 ///     .await?;
@@ -380,8 +322,8 @@ pub enum CredentialsFrom {
 /// ```
 #[derive(Debug, Clone)]
 pub struct Client {
-    /// Source of credentials (file path or direct value).
-    credentials_from: CredentialsFrom,
+    /// Credentials validated by [`Builder::build`].
+    credentials: Credentials,
     /// OAuth2 authentication flow to use.
     auth_flow: AuthFlow,
     /// Thread-safe token state with automatic refresh capabilities.
@@ -393,32 +335,9 @@ pub struct Client {
 }
 
 impl Client {
-    /// Validates that required credential fields are present for the selected auth flow.
-    fn validate_credentials(&self, credentials: &Credentials) -> Result<(), Error> {
-        match self.auth_flow {
-            AuthFlow::ClientCredentials => {
-                credentials
-                    .client_secret
-                    .as_ref()
-                    .ok_or(Error::MissingClientSecret)?;
-            }
-            AuthFlow::UsernamePassword => {
-                credentials
-                    .client_secret
-                    .as_ref()
-                    .ok_or(Error::MissingClientSecret)?;
-                credentials
-                    .username
-                    .as_ref()
-                    .ok_or(Error::MissingUsername)?;
-                credentials
-                    .password
-                    .as_ref()
-                    .ok_or(Error::MissingPassword)?;
-            }
-        }
-
-        Ok(())
+    /// Start a [`Builder`].
+    pub fn builder() -> Builder {
+        Builder::default()
     }
 
     /// Connects to Salesforce and exchanges credentials for an access token.
@@ -429,36 +348,32 @@ impl Client {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - Credentials file cannot be read ([`Error::ReadCredentials`])
-    /// - Credentials JSON is invalid ([`Error::ParseCredentials`])
-    /// - Required fields are missing for the auth flow ([`Error::MissingClientSecret`], [`Error::MissingUsername`], [`Error::MissingPassword`])
-    /// - Instance URL is malformed ([`Error::ParseUrl`])
-    /// - OAuth2 token exchange fails ([`Error::TokenExchange`])
+    /// - OAuth2 token exchange fails ([`Error::TokenExchange`], [`Error::OAuth2RequestFailed`])
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn connect(mut self) -> Result<Self, Error> {
-        let credentials = self.load_credentials().await?;
-
-        // Validate credentials for the selected auth flow
-        self.validate_credentials(&credentials)?;
-
-        let http_client = Self::build_auth_http_client()?;
-
-        let token_response = match self.auth_flow {
-            AuthFlow::ClientCredentials => {
-                self.exchange_client_credentials(&credentials, &http_client)
-                    .await?
-            }
-            AuthFlow::UsernamePassword => {
-                self.exchange_password(&credentials, &http_client).await?
-            }
-        };
+        let token_response = self.exchange_credentials().await?;
 
         let token_state = TokenState::new(token_response)?;
         self.token_state = Some(Arc::new(RwLock::new(token_state)));
-        self.instance_url = Some(credentials.instance_url);
-        self.tenant_id = Some(credentials.tenant_id);
+        self.instance_url = Some(self.credentials.instance_url.clone());
+        self.tenant_id = self.credentials.tenant_id.clone();
 
         Ok(self)
+    }
+
+    /// Runs the configured auth flow against the token endpoint.
+    async fn exchange_credentials(&self) -> Result<SalesforceTokenResponse, Error> {
+        let http_client = Self::build_auth_http_client()?;
+        match self.auth_flow {
+            AuthFlow::ClientCredentials => {
+                self.exchange_client_credentials(&self.credentials, &http_client)
+                    .await
+            }
+            AuthFlow::UsernamePassword => {
+                self.exchange_password(&self.credentials, &http_client)
+                    .await
+            }
+        }
     }
 
     /// Performs OAuth2 Client Credentials flow.
@@ -560,22 +475,6 @@ impl Client {
         })
     }
 
-    /// Loads credentials from the configured source.
-    async fn load_credentials(&self) -> Result<Credentials, Error> {
-        match &self.credentials_from {
-            CredentialsFrom::Value(creds) => Ok(creds.clone()),
-            CredentialsFrom::Path(path) => {
-                let credentials_string =
-                    fs::read_to_string(path).map_err(|e| Error::ReadCredentials {
-                        path: path.clone(),
-                        source: e,
-                    })?;
-                serde_json::from_str(&credentials_string)
-                    .map_err(|e| Error::ParseCredentials { source: e })
-            }
-        }
-    }
-
     /// Builds an HTTP client for OAuth2 requests.
     fn build_auth_http_client() -> Result<reqwest::Client, Error> {
         reqwest::Client::builder()
@@ -598,26 +497,12 @@ impl Client {
     ///
     /// Returns an error if:
     /// - Client is not connected ([`Error::NotConnected`])
-    /// - Credentials cannot be loaded ([`Error::ReadCredentials`], [`Error::ParseCredentials`])
     /// - OAuth2 authentication fails ([`Error::TokenExchange`])
     /// - Failed to acquire token state lock ([`Error::LockError`])
     async fn reauthenticate(&self) -> Result<(), Error> {
         let token_state_arc = self.token_state.as_ref().ok_or(Error::NotConnected)?;
 
-        let credentials = self.load_credentials().await?;
-        self.validate_credentials(&credentials)?;
-
-        let http_client = Self::build_auth_http_client()?;
-
-        let token_response = match self.auth_flow {
-            AuthFlow::ClientCredentials => {
-                self.exchange_client_credentials(&credentials, &http_client)
-                    .await?
-            }
-            AuthFlow::UsernamePassword => {
-                self.exchange_password(&credentials, &http_client).await?
-            }
-        };
+        let token_response = self.exchange_credentials().await?;
 
         let new_state = TokenState::new(token_response)?;
         let mut state = token_state_arc.write().map_err(|_| Error::LockError)?;
@@ -647,7 +532,7 @@ impl Client {
             state.refresh_token().ok_or(Error::NoRefreshToken)?.clone()
         };
 
-        let credentials = self.load_credentials().await?;
+        let credentials = &self.credentials;
 
         let client_secret = credentials
             .client_secret
@@ -741,19 +626,14 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
+    /// use salesforce_core::client;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut client = client::Builder::new()
-    ///     .credentials(Credentials {
-    ///         client_id: "your_client_id".to_string(),
-    ///         client_secret: Some("your_client_secret".into()),
-    ///         username: None,
-    ///         password: None,
-    ///         instance_url: "https://your-instance.salesforce.com".to_string(),
-    ///         tenant_id: "your_tenant_id".to_string(),
-    ///     })
+    /// let mut client = client::Client::builder()
+    ///     .client_id("your_client_id")
+    ///     .client_secret("your_client_secret")
+    ///     .instance_url("https://your-instance.my.salesforce.com")
     ///     .build()?
     ///     .connect()
     ///     .await?;
@@ -765,21 +645,7 @@ impl Client {
     /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn reconnect(&mut self) -> Result<(), Error> {
-        let credentials = self.load_credentials().await?;
-        self.validate_credentials(&credentials)?;
-
-        let http_client = Self::build_auth_http_client()?;
-
-        // Perform fresh OAuth2 authentication
-        let token_response = match self.auth_flow {
-            AuthFlow::ClientCredentials => {
-                self.exchange_client_credentials(&credentials, &http_client)
-                    .await?
-            }
-            AuthFlow::UsernamePassword => {
-                self.exchange_password(&credentials, &http_client).await?
-            }
-        };
+        let token_response = self.exchange_credentials().await?;
 
         let new_token_state = TokenState::new(token_response)?;
         match &self.token_state {
@@ -817,20 +683,15 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// use salesforce_core::client::{self, Credentials};
+    /// use salesforce_core::client;
     /// use salesforce_core::secrecy::ExposeSecret;
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = client::Builder::new()
-    ///     .credentials(Credentials {
-    ///         client_id: "your_client_id".to_string(),
-    ///         client_secret: Some("your_client_secret".into()),
-    ///         username: None,
-    ///         password: None,
-    ///         instance_url: "https://your-instance.salesforce.com".to_string(),
-    ///         tenant_id: "your_tenant_id".to_string(),
-    ///     })
+    /// let client = client::Client::builder()
+    ///     .client_id("your_client_id")
+    ///     .client_secret("your_client_secret")
+    ///     .instance_url("https://your-instance.my.salesforce.com")
     ///     .build()?
     ///     .connect()
     ///     .await?;
@@ -875,78 +736,54 @@ impl Client {
 
 /// Builder for constructing a [`Client`].
 ///
-/// The builder allows you to configure the authentication flow and credentials
-/// source before creating a client instance.
+/// Set each field with its own method, or pass a whole [`Credentials`] the
+/// application has loaded.
 ///
 /// # Examples
 ///
-/// ## Using Client Credentials Flow
-///
-/// ```no_run
-/// use salesforce_core::client::{self, Credentials, AuthFlow};
-///
-/// # #[tokio::main]
-/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = client::Builder::new()
-///     .credentials(Credentials {
-///         client_id: "your_client_id".to_string(),
-///         client_secret: Some("your_client_secret".into()),
-///         username: None,
-///         password: None,
-///         instance_url: "https://your-instance.salesforce.com".to_string(),
-///         tenant_id: "your_tenant_id".to_string(),
-///     })
-///     .auth_flow(AuthFlow::ClientCredentials)
-///     .build()?
-///     .connect()
-///     .await?;
-/// # Ok(())
-/// # }
-/// ```
-///
-/// ## Using Username-Password Flow
-///
-/// ```no_run
-/// use salesforce_core::client::{self, Credentials, AuthFlow};
-///
-/// # #[tokio::main]
-/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = client::Builder::new()
-///     .credentials(Credentials {
-///         client_id: "your_client_id".to_string(),
-///         client_secret: Some("your_client_secret".into()),
-///         username: Some("user@example.com".to_string()),
-///         password: Some("your_password".into()),
-///         instance_url: "https://your-instance.salesforce.com".to_string(),
-///         tenant_id: "your_tenant_id".to_string(),
-///     })
-///     .auth_flow(AuthFlow::UsernamePassword)
-///     .build()?
-///     .connect()
-///     .await?;
-/// # Ok(())
-/// # }
-/// ```
-///
-/// ## Loading from File
+/// ## Field by field
 ///
 /// ```no_run
 /// use salesforce_core::client;
-/// use std::path::PathBuf;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = client::Builder::new()
-///     .credentials_path(PathBuf::from("credentials.json"))
+/// let client = client::Client::builder()
+///     .client_id(std::env::var("SFDC_CLIENT_ID")?)
+///     .client_secret(std::env::var("SFDC_CLIENT_SECRET")?)
+///     .instance_url("https://your-instance.my.salesforce.com")
 ///     .build()?
 ///     .connect()
 ///     .await?;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Default)]
+///
+/// ## From a JSON file the application reads
+///
+/// ```no_run
+/// use salesforce_core::client::{self, Credentials};
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let credentials: Credentials =
+///     serde_json::from_str(&std::fs::read_to_string("credentials.json")?)?;
+/// let client = client::Client::builder()
+///     .credentials(credentials)
+///     .build()?
+///     .connect()
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug, Default)]
 pub struct Builder {
-    credentials_from: Option<CredentialsFrom>,
+    client_id: Option<String>,
+    client_secret: Option<SecretString>,
+    username: Option<String>,
+    password: Option<SecretString>,
+    instance_url: Option<String>,
+    tenant_id: Option<String>,
     auth_flow: Option<AuthFlow>,
 }
 
@@ -961,40 +798,64 @@ impl Builder {
         Self::default()
     }
 
-    /// Sets credentials to load from a JSON file.
-    ///
-    /// The file should contain a JSON object with the required fields for
-    /// your chosen authentication flow. For example:
-    ///
-    /// ```json
-    /// {
-    ///   "client_id": "your_client_id",
-    ///   "client_secret": "your_client_secret",
-    ///   "instance_url": "https://your-instance.salesforce.com",
-    ///   "tenant_id": "your_tenant_id"
-    /// }
-    /// ```
-    ///
-    /// For [`AuthFlow::UsernamePassword`], also include `username` and `password`.
-    ///
-    /// # Returns
-    ///
-    /// `Self` for method chaining.
-    pub fn credentials_path(mut self, path: PathBuf) -> Self {
-        self.credentials_from = Some(CredentialsFrom::Path(path));
-        self
-    }
-
-    /// Sets credentials directly.
-    ///
-    /// Provide a [`Credentials`] struct with the appropriate fields populated
-    /// for your chosen authentication flow.
+    /// Sets every credential field at once, replacing earlier values.
     ///
     /// # Returns
     ///
     /// `Self` for method chaining.
     pub fn credentials(mut self, credentials: Credentials) -> Self {
-        self.credentials_from = Some(CredentialsFrom::Value(credentials));
+        let Credentials {
+            client_id,
+            client_secret,
+            username,
+            password,
+            instance_url,
+            tenant_id,
+        } = credentials;
+        self.client_id = Some(client_id);
+        self.client_secret = client_secret;
+        self.username = username;
+        self.password = password;
+        self.instance_url = Some(instance_url);
+        self.tenant_id = tenant_id;
+        self
+    }
+
+    /// Client ID (Consumer Key) from the Connected App.
+    pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
+        self.client_id = Some(client_id.into());
+        self
+    }
+
+    /// Client Secret (Consumer Secret) from the Connected App.
+    pub fn client_secret(mut self, client_secret: impl Into<SecretString>) -> Self {
+        self.client_secret = Some(client_secret.into());
+        self
+    }
+
+    /// Username for [`AuthFlow::UsernamePassword`].
+    pub fn username(mut self, username: impl Into<String>) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    /// Password for [`AuthFlow::UsernamePassword`]. If your org requires a
+    /// security token, append it to the password.
+    pub fn password(mut self, password: impl Into<SecretString>) -> Self {
+        self.password = Some(password.into());
+        self
+    }
+
+    /// Instance URL (e.g. `https://mydomain.my.salesforce.com`). The token
+    /// is requested from this host.
+    pub fn instance_url(mut self, instance_url: impl Into<String>) -> Self {
+        self.instance_url = Some(instance_url.into());
+        self
+    }
+
+    /// Organization ID (15 or 18 characters). Only the Pub/Sub API needs it.
+    pub fn tenant_id(mut self, tenant_id: impl Into<String>) -> Self {
+        self.tenant_id = Some(tenant_id.into());
         self
     }
 
@@ -1023,13 +884,38 @@ impl Builder {
     ///
     /// # Errors
     ///
-    /// Returns an error if credentials were not provided via either
-    /// [`credentials_path`](Self::credentials_path) or [`credentials`](Self::credentials).
+    /// Returns an error if:
+    /// - The client ID or instance URL is missing ([`Error::MissingClientId`], [`Error::MissingInstanceUrl`])
+    /// - The instance URL is not an absolute URL ([`Error::ParseUrl`])
+    /// - A field the auth flow needs is missing ([`Error::MissingClientSecret`], [`Error::MissingUsername`], [`Error::MissingPassword`])
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub fn build(self) -> Result<Client, Error> {
+        let auth_flow = self.auth_flow.unwrap_or_default();
+        let client_id = self.client_id.ok_or(Error::MissingClientId)?;
+        let instance_url = self.instance_url.ok_or(Error::MissingInstanceUrl)?;
+        url::Url::parse(&instance_url).map_err(|source| Error::ParseUrl { source })?;
+        if self.client_secret.is_none() {
+            return Err(Error::MissingClientSecret);
+        }
+        if auth_flow == AuthFlow::UsernamePassword {
+            if self.username.is_none() {
+                return Err(Error::MissingUsername);
+            }
+            if self.password.is_none() {
+                return Err(Error::MissingPassword);
+            }
+        }
+
         Ok(Client {
-            credentials_from: self.credentials_from.ok_or(Error::MissingCredentials)?,
-            auth_flow: self.auth_flow.unwrap_or_default(),
+            credentials: Credentials {
+                client_id,
+                client_secret: self.client_secret,
+                username: self.username,
+                password: self.password,
+                instance_url,
+                tenant_id: self.tenant_id,
+            },
+            auth_flow,
             token_state: None,
             instance_url: None,
             tenant_id: None,
@@ -1040,14 +926,42 @@ impl Builder {
 #[cfg(test)]
 mod tests {
 
-    use std::env;
-
     use super::*;
 
+    fn builder() -> Builder {
+        Builder::new()
+            .client_id("test_client_id")
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+    }
+
     #[test]
-    fn test_build_without_credentials() {
-        let client = Builder::new().build();
-        assert!(matches!(client, Err(Error::MissingCredentials)));
+    fn test_build_without_client_id() {
+        let client = Builder::new()
+            .client_secret("test_secret")
+            .instance_url("https://test.salesforce.com")
+            .build();
+        assert!(matches!(client, Err(Error::MissingClientId)));
+    }
+
+    #[test]
+    fn test_build_without_instance_url() {
+        let client = Builder::new()
+            .client_id("test_client_id")
+            .client_secret("test_secret")
+            .build();
+        assert!(matches!(client, Err(Error::MissingInstanceUrl)));
+    }
+
+    #[test]
+    fn test_build_with_relative_instance_url() {
+        let client = builder().instance_url("mydomain.salesforce.com").build();
+        assert!(matches!(client, Err(Error::ParseUrl { .. })));
+    }
+
+    #[test]
+    fn test_build_without_tenant_id() {
+        assert!(builder().build().is_ok());
     }
 
     #[test]
@@ -1058,7 +972,7 @@ mod tests {
             username: Some("user@example.com".to_string()),
             password: Some("password-value".into()),
             instance_url: "https://localhost".to_string(),
-            tenant_id: "tenant".to_string(),
+            tenant_id: None,
         };
         let debug = format!("{credentials:?}");
         assert!(!debug.contains("client-secret-value"));
@@ -1066,172 +980,74 @@ mod tests {
     }
 
     #[test]
-    fn test_build_with_credentials() {
-        let mut path = env::temp_dir();
-        path.push(format!("credentials_{}.json", std::process::id()));
-        let client = Builder::new().credentials_path(path).build();
-        assert!(client.is_ok());
+    fn test_credentials_deserialize_without_optional_fields() {
+        let credentials: Credentials = serde_json::from_str(
+            r#"{"client_id": "id", "instance_url": "https://localhost", "extra": 1}"#,
+        )
+        .unwrap();
+        assert!(credentials.client_secret.is_none());
+        assert!(credentials.tenant_id.is_none());
+    }
+
+    #[test]
+    fn test_setters_override_credentials() {
+        let client = Builder::new()
+            .credentials(Credentials {
+                client_id: "id".to_string(),
+                client_secret: None,
+                username: None,
+                password: None,
+                instance_url: "https://localhost".to_string(),
+                tenant_id: None,
+            })
+            .client_secret("secret")
+            .tenant_id("tenant")
+            .build()
+            .unwrap();
+        assert_eq!(client.credentials.tenant_id.as_deref(), Some("tenant"));
     }
 
     #[tokio::test]
     async fn test_connect_with_invalid_credentials() {
-        let creds: &str = r#"{"client_id":"client_id"}"#;
-        let mut path = env::temp_dir();
-        path.push(format!("invalid_credentials_{}.json", std::process::id()));
-        let _ = fs::write(path.clone(), creds);
-        let client = Builder::new()
-            .credentials_path(path.clone())
-            .build()
-            .unwrap();
-        let result = client.connect().await;
-        let _ = fs::remove_file(path);
-        assert!(matches!(result, Err(Error::ParseCredentials { .. })));
-    }
-
-    #[tokio::test]
-    async fn test_connect_with_invalid_url() {
-        let creds: &str = r#"
-            {
-                "client_id": "some_client_id",
-                "client_secret": "some_client_secret",
-                "instance_url": "mydomain.salesforce.com",
-                "tenant_id": "some_tenant_id"
-            }"#;
-        let mut path = env::temp_dir();
-        path.push(format!(
-            "invalid_url_credentials_{}.json",
-            std::process::id()
-        ));
-        let _ = fs::write(path.clone(), creds);
-        let client = Builder::new()
-            .credentials_path(path.clone())
-            .build()
-            .unwrap();
-        let result = client.connect().await;
-        let _ = fs::remove_file(path);
-        // Invalid URL (missing https://) results in network error wrapped in TokenExchange
-        assert!(matches!(result, Err(Error::TokenExchange { .. })));
-    }
-
-    #[tokio::test]
-    async fn test_connect_with_missing_file() {
-        let mut path = env::temp_dir();
-        path.push(format!("nonexistent_{}.json", std::process::id()));
-        let client = Builder::new().credentials_path(path).build().unwrap();
-        let result = client.connect().await;
-        assert!(matches!(result, Err(Error::ReadCredentials { .. })));
-    }
-
-    #[tokio::test]
-    async fn test_connect_with_valid_json_but_invalid_credentials() {
-        let creds: &str = r#"
-            {
-                "client_id": "test_client_id",
-                "client_secret": "test_client_secret",
-                "instance_url": "https://test.salesforce.com",
-                "tenant_id": "test_tenant_id"
-            }"#;
-        let mut path = env::temp_dir();
-        path.push(format!(
-            "valid_json_invalid_creds_{}.json",
-            std::process::id()
-        ));
-        let _ = fs::write(path.clone(), creds);
-        let client = Builder::new()
-            .credentials_path(path.clone())
-            .build()
-            .unwrap();
-        let result = client.connect().await;
-        let _ = fs::remove_file(path);
-        // Should fail with OAuth2RequestFailed (invalid credentials return HTTP error)
-        assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
-    }
-
-    #[tokio::test]
-    async fn test_connect_with_direct_credentials() {
-        let creds = Credentials {
-            client_id: "test_client_id".to_string(),
-            client_secret: Some("test_client_secret".into()),
-            username: None,
-            password: None,
-            instance_url: "https://test.salesforce.com".to_string(),
-            tenant_id: "test_tenant_id".to_string(),
-        };
-        let client = Builder::new().credentials(creds).build().unwrap();
+        let client = builder().build().unwrap();
         let result = client.connect().await;
         // Should fail with OAuth2RequestFailed (invalid credentials return HTTP error)
         assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
     }
 
-    #[tokio::test]
-    async fn test_client_credentials_flow_missing_secret() {
-        let creds = Credentials {
-            client_id: "test_client_id".to_string(),
-            client_secret: None,
-            username: None,
-            password: None,
-            instance_url: "https://test.salesforce.com".to_string(),
-            tenant_id: "test_tenant_id".to_string(),
-        };
-        let client = Builder::new()
-            .credentials(creds)
+    #[test]
+    fn test_client_credentials_flow_missing_secret() {
+        let result = Builder::new()
+            .client_id("test_client_id")
+            .instance_url("https://test.salesforce.com")
             .auth_flow(AuthFlow::ClientCredentials)
-            .build()
-            .unwrap();
-        let result = client.connect().await;
+            .build();
         assert!(matches!(result, Err(Error::MissingClientSecret)));
     }
 
-    #[tokio::test]
-    async fn test_username_password_flow_missing_username() {
-        let creds = Credentials {
-            client_id: "test_client_id".to_string(),
-            client_secret: Some("test_secret".into()),
-            username: None,
-            password: Some("test_password".into()),
-            instance_url: "https://test.salesforce.com".to_string(),
-            tenant_id: "test_tenant_id".to_string(),
-        };
-        let client = Builder::new()
-            .credentials(creds)
+    #[test]
+    fn test_username_password_flow_missing_username() {
+        let result = builder()
+            .password("test_password")
             .auth_flow(AuthFlow::UsernamePassword)
-            .build()
-            .unwrap();
-        let result = client.connect().await;
+            .build();
         assert!(matches!(result, Err(Error::MissingUsername)));
     }
 
-    #[tokio::test]
-    async fn test_username_password_flow_missing_password() {
-        let creds = Credentials {
-            client_id: "test_client_id".to_string(),
-            client_secret: Some("test_secret".into()),
-            username: Some("test_user".to_string()),
-            password: None,
-            instance_url: "https://test.salesforce.com".to_string(),
-            tenant_id: "test_tenant_id".to_string(),
-        };
-        let client = Builder::new()
-            .credentials(creds)
+    #[test]
+    fn test_username_password_flow_missing_password() {
+        let result = builder()
+            .username("test_user")
             .auth_flow(AuthFlow::UsernamePassword)
-            .build()
-            .unwrap();
-        let result = client.connect().await;
+            .build();
         assert!(matches!(result, Err(Error::MissingPassword)));
     }
 
     #[tokio::test]
     async fn test_username_password_flow_with_valid_fields() {
-        let creds = Credentials {
-            client_id: "test_client_id".to_string(),
-            client_secret: Some("test_secret".into()),
-            username: Some("test_user".to_string()),
-            password: Some("test_password".into()),
-            instance_url: "https://test.salesforce.com".to_string(),
-            tenant_id: "test_tenant_id".to_string(),
-        };
-        let client = Builder::new()
-            .credentials(creds)
+        let client = builder()
+            .username("test_user")
+            .password("test_password")
             .auth_flow(AuthFlow::UsernamePassword)
             .build()
             .unwrap();
@@ -1240,22 +1056,15 @@ mod tests {
         assert!(matches!(result, Err(Error::OAuth2RequestFailed { .. })));
     }
 
-    #[tokio::test]
-    async fn test_username_password_flow_missing_client_secret() {
-        let creds = Credentials {
-            client_id: "test_client_id".to_string(),
-            client_secret: None,
-            username: Some("test_user".to_string()),
-            password: Some("test_password".into()),
-            instance_url: "https://test.salesforce.com".to_string(),
-            tenant_id: "test_tenant_id".to_string(),
-        };
-        let client = Builder::new()
-            .credentials(creds)
+    #[test]
+    fn test_username_password_flow_missing_client_secret() {
+        let result = Builder::new()
+            .client_id("test_client_id")
+            .instance_url("https://test.salesforce.com")
+            .username("test_user")
+            .password("test_password")
             .auth_flow(AuthFlow::UsernamePassword)
-            .build()
-            .unwrap();
-        let result = client.connect().await;
+            .build();
         assert!(matches!(result, Err(Error::MissingClientSecret)));
     }
 
@@ -1288,17 +1097,7 @@ mod tests {
 
     #[test]
     fn test_current_access_token_without_connection() {
-        let client = Builder::new()
-            .credentials(Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
-            .build()
-            .unwrap();
+        let client = builder().build().unwrap();
 
         let result = client.current_access_token();
         assert!(matches!(result, Err(Error::NotConnected)));
@@ -1306,17 +1105,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_access_token_without_connection() {
-        let client = Builder::new()
-            .credentials(Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
-            .build()
-            .unwrap();
+        let client = builder().build().unwrap();
 
         let result = client.access_token().await;
         assert!(matches!(result, Err(Error::NotConnected)));
@@ -1330,17 +1119,7 @@ mod tests {
 
         // Build a connected client with an already-expired token (no refresh token,
         // as the Client Credentials flow returns).
-        let mut client = Builder::new()
-            .credentials(Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
-            .build()
-            .unwrap();
+        let mut client = builder().build().unwrap();
 
         // Inject an expired token with no refresh token to simulate Client Credentials expiry.
         let mut token_response = BasicTokenResponse::new(
@@ -1366,17 +1145,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_reconnect_without_connection() {
-        let mut client = Builder::new()
-            .credentials(Credentials {
-                client_id: "test_id".to_string(),
-                client_secret: Some("test_secret".into()),
-                username: None,
-                password: None,
-                instance_url: "https://test.salesforce.com".to_string(),
-                tenant_id: "test_tenant".to_string(),
-            })
-            .build()
-            .unwrap();
+        let mut client = builder().build().unwrap();
 
         // Reconnect should fail with OAuth2RequestFailed since we have invalid credentials
         let result = client.reconnect().await;
@@ -1414,7 +1183,8 @@ mod tests {
 
     #[test]
     fn test_is_retryable_config_errors() {
-        assert!(!Error::MissingCredentials.is_retryable());
+        assert!(!Error::MissingClientId.is_retryable());
+        assert!(!Error::MissingInstanceUrl.is_retryable());
         assert!(!Error::MissingClientSecret.is_retryable());
         assert!(!Error::MissingUsername.is_retryable());
         assert!(!Error::MissingPassword.is_retryable());
