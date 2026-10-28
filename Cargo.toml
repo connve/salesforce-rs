@@ -9,11 +9,11 @@ members = [
 ]
 
 [workspace.package]
-version = "0.23.0"
+version = "0.24.0"
 authors = ["CONNVE"]
 license = "MPL-2.0"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.89"
 repository = "https://github.com/connve/salesforce-rs"
 documentation = "https://docs.rs/salesforce_core"
 keywords = ["salesforce", "sdk", "api", "oauth2", "grpc"]
@@ -29,19 +29,17 @@ allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
 
 [workspace.dependencies]
-salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "=0.23.0" }
-salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "=0.23.0" }
-salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "=0.23.0" }
-salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "=0.23.0" }
+salesforce_core_pubsubapi = { path = "generated/salesforce-core/pubsubapi", version = "=0.24.0" }
+salesforce_core_bulkapi = { path = "generated/salesforce-core/bulkapi", version = "=0.24.0" }
+salesforce_core_restapi = { path = "generated/salesforce-core/restapi", version = "=0.24.0" }
+salesforce_core_toolingapi = { path = "generated/salesforce-core/toolingapi", version = "=0.24.0" }
 tokio = { version = "1.48", default-features = false, features = [
     "macros",
     "rt-multi-thread",
     "sync",
     "signal",
 ] }
-tokio-stream = { version = "0.1", default-features = false, features = [
-    "time",
-] }
+tokio-stream = { version = "0.1", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 tonic = { version = "0.14", default-features = false, features = [
     "transport",
@@ -70,11 +68,13 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 wiremock = "0.6"
-progenitor = "0.13"
+progenitor = { version = "0.13", default-features = false }
 progenitor-client = "0.13"
 quote = "1.0"
 openapiv3 = { version = "2.2", default-features = false }
-serde_yaml = { version = "0.9", default-features = false }
+serde-saphyr = { version = "2.0", default-features = false, features = [
+    "deserialize",
+] }
 chrono = { version = "0.4", default-features = false, features = [
     "serde",
     "std",

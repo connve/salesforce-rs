@@ -3,7 +3,6 @@ use salesforce_core::pubsubapi::{
     Client, FetchRequest, ReplayPreset, SchemaRequest, TopicRequest, ENDPOINT,
 };
 use std::env;
-use tokio_stream::StreamExt;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -83,29 +82,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Example: Subscribe to events (infinite stream in background task)
-    let fetch_request = FetchRequest {
+    // Example: Subscribe to events in a background task
+    let (tx, rx) = tokio::sync::mpsc::channel(1);
+    tx.send(FetchRequest {
         topic_name: "/data/AccountChangeEvent".to_string(),
         replay_preset: ReplayPreset::Latest.into(),
         num_requested: 100,
         ..Default::default()
-    };
+    })
+    .await?;
 
-    match context.subscribe(fetch_request).await {
+    match context.subscribe(rx).await {
         Ok(response) => {
             info!("Subscribed to topic successfully");
-            let stream = response.into_inner();
+            let mut stream = response.into_inner();
 
             tokio::spawn(async move {
-                let mut stream = stream;
-                while let Some(result) = stream.next().await {
-                    match result {
-                        Ok(fetch_response) => {
+                loop {
+                    match stream.message().await {
+                        Ok(Some(fetch_response)) => {
                             info!("Received {} events", fetch_response.events.len());
                             for event in &fetch_response.events {
                                 info!("Event replay_id: {:?}", event.replay_id);
                             }
+                            // Keepalive responses have no events.
+                            if !fetch_response.events.is_empty()
+                                && fetch_response.pending_num_requested == 0
+                            {
+                                let next = FetchRequest {
+                                    num_requested: 100,
+                                    ..Default::default()
+                                };
+                                if tx.send(next).await.is_err() {
+                                    break;
+                                }
+                            }
                         }
+                        Ok(None) => break,
                         Err(e) => {
                             error!("Stream error: {e}");
                             break;

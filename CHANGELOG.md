@@ -4,6 +4,20 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.24.0]
+
+### Changed
+- **Breaking:** `pubsubapi::Client::subscribe`, `managed_subscribe`, and `publish_stream` take a `tokio::sync::mpsc::Receiver` of requests instead of a single request. Fetch and commit requests go through the sender. The stream ends when all senders are dropped.
+  Before: `client.subscribe(request).await?`
+  After: `let (tx, rx) = tokio::sync::mpsc::channel(1); tx.send(request).await?; client.subscribe(rx).await?`
+- `tokio-stream` is only enabled with the `pubsubapi` feature, without its `time` feature. The generated `salesforce_core_pubsubapi` crate no longer depends on it.
+- **Breaking:** MSRV is 1.89.
+- The generated crates read their OpenAPI specs with `serde-saphyr` instead of the unmaintained `serde_yaml`, and build `progenitor` without its `macro` feature. `unsafe-libyaml` is no longer in the dependency tree.
+
+### Fixed
+- `subscribe` and `managed_subscribe` no longer resend the first request every 10 ms, so `num_requested` limits how many events the server sends.
+- `publish_stream` no longer republishes the same `PublishRequest` every 10 ms.
+
 ## [0.23.0]
 
 ### Added

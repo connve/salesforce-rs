@@ -38,5 +38,5 @@ tokio = { workspace = true, features = ["net", "io-util"] }
 [build-dependencies]
 progenitor = { workspace = true }
 openapiv3 = { workspace = true }
-serde_yaml = { workspace = true }
+serde-saphyr = { workspace = true }
 quote = { workspace = true }

@@ -142,12 +142,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("3. The subscription will use the replay settings configured here");
     info!("");
     info!("Example code:");
-    info!("  let request = ManagedFetchRequest {{");
+    info!("  let (tx, rx) = tokio::sync::mpsc::channel(1);");
+    info!("  tx.send(ManagedFetchRequest {{");
     info!("      developer_name: \"Managed_Sub_AccountChangeEvent\".to_string(),");
     info!("      num_requested: 100,");
     info!("      ..Default::default()");
-    info!("  }};");
-    info!("  let stream = pubsub_client.managed_subscribe(request).await?;");
+    info!("  }}).await?;");
+    info!("  let stream = pubsub_client.managed_subscribe(rx).await?;");
+    info!("  // Send CommitReplayRequest on tx after each processed batch.");
 
     info!("\n--- Replay Preset Information ---");
     info!("LATEST:  Subscribe to new events from now onwards");

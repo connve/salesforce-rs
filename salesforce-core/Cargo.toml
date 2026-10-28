@@ -25,13 +25,17 @@ default = ["restapi", "bulkapi", "toolingapi", "pubsubapi", "soapapi"]
 restapi = ["dep:salesforce_core_restapi"]
 bulkapi = ["dep:salesforce_core_bulkapi", "dep:futures-util"]
 toolingapi = ["dep:salesforce_core_toolingapi"]
-pubsubapi = ["dep:salesforce_core_pubsubapi", "dep:tonic", "dep:futures-util"]
+pubsubapi = [
+    "dep:salesforce_core_pubsubapi",
+    "dep:tonic",
+    "dep:tokio-stream",
+    "dep:futures-util",
+]
 soapapi = []
 trace = ["tracing/attributes"]
 
 [dependencies]
 tokio = { workspace = true }
-tokio-stream = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 chrono = { workspace = true }
@@ -45,10 +49,14 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 secrecy = { workspace = true }
 tonic = { workspace = true, optional = true }
+tokio-stream = { workspace = true, optional = true }
 tracing = { workspace = true }
 futures-util = { workspace = true, optional = true }
 
 [dev-dependencies]
+# `router` and `time` are for `tests/mock_pubsubapi.rs`.
+tonic = { workspace = true, features = ["router"] }
+tokio = { workspace = true, features = ["time"] }
 tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }
 
@@ -86,6 +94,11 @@ required-features = ["bulkapi"]
 name = "mock_bulkapi"
 path = "tests/mock_bulkapi.rs"
 required-features = ["bulkapi"]
+
+[[test]]
+name = "mock_pubsubapi"
+path = "tests/mock_pubsubapi.rs"
+required-features = ["pubsubapi"]
 
 [[test]]
 name = "composite"
