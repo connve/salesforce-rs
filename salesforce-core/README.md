@@ -17,7 +17,7 @@ Part of the [salesforce-rs](https://github.com/connve/salesforce-rs) project.
 
 ```toml
 [dependencies]
-salesforce_core = "0.23"
+salesforce_core = "0.24"
 ```
 
 ```rust
@@ -131,7 +131,7 @@ All features except `trace` are enabled by default. For a slim build, turn
 off the defaults and pick what you need:
 
 ```toml
-salesforce_core = { version = "0.23", default-features = false, features = ["restapi"] }
+salesforce_core = { version = "0.24", default-features = false, features = ["restapi"] }
 ```
 
 `chrono` is re-exported as `salesforce_core::chrono`. Use it for the

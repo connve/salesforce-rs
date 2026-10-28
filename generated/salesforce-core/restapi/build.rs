@@ -5,7 +5,7 @@ use std::path::PathBuf;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec_path = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("openapi.yaml");
     let spec_content = fs::read_to_string(&spec_path)?;
-    let spec: openapiv3::OpenAPI = serde_yaml::from_str(&spec_content)?;
+    let spec: openapiv3::OpenAPI = serde_saphyr::from_str(&spec_content)?;
 
     // The client carries the per-call headers of one request builder; the
     // `pre` hook in `src/lib.rs` adds them to the request.

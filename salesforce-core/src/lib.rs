@@ -48,7 +48,7 @@
 //! For a slim build, disable defaults and opt in:
 //!
 //! ```toml
-//! salesforce_core = { version = "0.23", default-features = false, features = ["restapi"] }
+//! salesforce_core = { version = "0.24", default-features = false, features = ["restapi"] }
 //! ```
 
 /// Re-export of [`chrono`], which appears in this crate's public API.

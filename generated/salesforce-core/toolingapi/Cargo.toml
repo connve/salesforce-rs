@@ -33,4 +33,4 @@ progenitor-client = { workspace = true }
 [build-dependencies]
 progenitor = { workspace = true }
 openapiv3 = { workspace = true }
-serde_yaml = { workspace = true }
+serde-saphyr = { workspace = true }

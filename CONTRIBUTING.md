@@ -124,7 +124,7 @@ arguments directly; migrating them is open work.
   updates them together with `[workspace.package] version`.
 - We use `resolver = "3"`, so `cargo update` only picks versions that build
   on our `rust-version`. The `test-msrv` CI job checks this.
-- MSRV is 1.88, the minimum required by `progenitor` 0.13 and `tonic` 0.14.
+- MSRV is 1.89, the minimum required by `serde-saphyr` 2.0.
   Raise it only when a dependency requires it, together with the `test-msrv`
   job and a CHANGELOG entry.
 

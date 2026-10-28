@@ -1,7 +1,7 @@
 use crate::client;
 use salesforce_core_pubsubapi::eventbus::v1::pub_sub_client::PubSubClient;
 use secrecy::ExposeSecret;
-use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 
 /// Errors that can occur during Pub/Sub operations.
 #[derive(thiserror::Error, Debug)]
@@ -319,12 +319,58 @@ impl Client {
 
     /// Subscribes to events from a topic.
     ///
-    /// Returns a stream of events. The stream will continue until an error
-    /// occurs or the connection is closed.
+    /// Each request asks for `num_requested` more events. The first one also
+    /// sets the topic and replay position. The subscription ends when all
+    /// senders are dropped.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use salesforce_core::client;
+    /// use salesforce_core::pubsubapi::{Client, FetchRequest, ReplayPreset, ENDPOINT};
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
+    /// #     .tenant_id("...")
+    /// #     .build()?
+    /// #     .connect()
+    /// #     .await?;
+    /// # let channel = tonic::transport::Channel::from_static(ENDPOINT).connect().await?;
+    /// let mut pubsub_client = Client::new(channel, auth_client)?;
+    ///
+    /// let (tx, rx) = tokio::sync::mpsc::channel(1);
+    /// tx.send(FetchRequest {
+    ///     topic_name: "/data/AccountChangeEvent".to_string(),
+    ///     replay_preset: ReplayPreset::Latest.into(),
+    ///     num_requested: 25,
+    ///     ..Default::default()
+    /// })
+    /// .await?;
+    ///
+    /// let mut stream = pubsub_client.subscribe(rx).await?.into_inner();
+    /// while let Some(response) = stream.message().await? {
+    ///     // Process the batch, then ask for more.
+    ///     if !response.events.is_empty() && response.pending_num_requested == 0 {
+    ///         tx.send(FetchRequest {
+    ///             num_requested: 25,
+    ///             ..Default::default()
+    ///         })
+    ///         .await?;
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn subscribe(
         &mut self,
-        request: salesforce_core_pubsubapi::eventbus::v1::FetchRequest,
+        requests: tokio::sync::mpsc::Receiver<
+            salesforce_core_pubsubapi::eventbus::v1::FetchRequest,
+        >,
     ) -> Result<
         tonic::Response<
             tonic::codec::Streaming<salesforce_core_pubsubapi::eventbus::v1::FetchResponse>,
@@ -332,23 +378,80 @@ impl Client {
         Error,
     > {
         self.pubsub
-            .subscribe(
-                tokio_stream::iter(1..usize::MAX)
-                    .map(move |_| request.to_owned())
-                    .throttle(std::time::Duration::from_millis(10)),
-            )
+            .subscribe(ReceiverStream::new(requests))
             .await
             .map_err(|e| Error::Tonic(Box::new(e)))
     }
 
     /// Subscribes to events using a managed subscription.
     ///
-    /// Requires a pre-configured managed subscription in Salesforce.
-    /// Returns a stream of events with automatic commit handling.
+    /// Requires a managed subscription configured in Salesforce. Each request
+    /// asks for more events (`num_requested`) or commits a replay ID
+    /// (`commit_replay_id_request`). A new subscription resumes after the
+    /// last committed replay ID. The subscription ends when all senders are
+    /// dropped.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use salesforce_core::client;
+    /// use salesforce_core::pubsubapi::{Client, CommitReplayRequest, ManagedFetchRequest, ENDPOINT};
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let auth_client = client::Client::builder()
+    /// #     .client_id("...")
+    /// #     .client_secret("...")
+    /// #     .instance_url("https://your-instance.my.salesforce.com")
+    /// #     .tenant_id("...")
+    /// #     .build()?
+    /// #     .connect()
+    /// #     .await?;
+    /// # let channel = tonic::transport::Channel::from_static(ENDPOINT).connect().await?;
+    /// let mut pubsub_client = Client::new(channel, auth_client)?;
+    ///
+    /// let (tx, rx) = tokio::sync::mpsc::channel(1);
+    /// tx.send(ManagedFetchRequest {
+    ///     developer_name: "Managed_Sub_AccountChangeEvent".to_string(),
+    ///     num_requested: 25,
+    ///     ..Default::default()
+    /// })
+    /// .await?;
+    ///
+    /// let mut stream = pubsub_client.managed_subscribe(rx).await?.into_inner();
+    /// let mut commits: u64 = 0;
+    /// while let Some(response) = stream.message().await? {
+    ///     // Commit acknowledgements have no events.
+    ///     let Some(last) = response.events.last() else {
+    ///         continue;
+    ///     };
+    ///     // Process the batch, then commit its last replay ID.
+    ///     commits += 1;
+    ///     tx.send(ManagedFetchRequest {
+    ///         commit_replay_id_request: Some(CommitReplayRequest {
+    ///             commit_request_id: commits.to_string(),
+    ///             replay_id: last.replay_id.clone(),
+    ///         }),
+    ///         ..Default::default()
+    ///     })
+    ///     .await?;
+    ///     if response.pending_num_requested == 0 {
+    ///         tx.send(ManagedFetchRequest {
+    ///             num_requested: 25,
+    ///             ..Default::default()
+    ///         })
+    ///         .await?;
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn managed_subscribe(
         &mut self,
-        request: salesforce_core_pubsubapi::eventbus::v1::ManagedFetchRequest,
+        requests: tokio::sync::mpsc::Receiver<
+            salesforce_core_pubsubapi::eventbus::v1::ManagedFetchRequest,
+        >,
     ) -> Result<
         tonic::Response<
             tonic::codec::Streaming<salesforce_core_pubsubapi::eventbus::v1::ManagedFetchResponse>,
@@ -356,23 +459,21 @@ impl Client {
         Error,
     > {
         self.pubsub
-            .managed_subscribe(
-                tokio_stream::iter(1..usize::MAX)
-                    .map(move |_| request.to_owned())
-                    .throttle(std::time::Duration::from_millis(10)),
-            )
+            .managed_subscribe(ReceiverStream::new(requests))
             .await
             .map_err(|e| Error::Tonic(Box::new(e)))
     }
 
     /// Publishes events via a bidirectional stream.
     ///
-    /// Allows for continuous publishing with server responses for each batch.
-    /// Useful for high-throughput scenarios.
+    /// Publishes each request once. The stream ends when all senders are
+    /// dropped.
     #[cfg_attr(feature = "trace", tracing::instrument(skip_all))]
     pub async fn publish_stream(
         &mut self,
-        request: salesforce_core_pubsubapi::eventbus::v1::PublishRequest,
+        requests: tokio::sync::mpsc::Receiver<
+            salesforce_core_pubsubapi::eventbus::v1::PublishRequest,
+        >,
     ) -> Result<
         tonic::Response<
             tonic::codec::Streaming<salesforce_core_pubsubapi::eventbus::v1::PublishResponse>,
@@ -380,11 +481,7 @@ impl Client {
         Error,
     > {
         self.pubsub
-            .publish_stream(
-                tokio_stream::iter(1..usize::MAX)
-                    .map(move |_| request.to_owned())
-                    .throttle(std::time::Duration::from_millis(10)),
-            )
+            .publish_stream(ReceiverStream::new(requests))
             .await
             .map_err(|e| Error::Tonic(Box::new(e)))
     }
